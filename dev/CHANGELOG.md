@@ -26,6 +26,7 @@
 - Bouton info (ⓘ) fusionné dans le crayon (✏️) → ouvre modal détails
 - `GET /api/positions` : inclut toujours les `gpx_waypoint` quelle que soit la fenêtre temporelle
 - Process PM2 renommé `meshtastic-tracker` → `tracemap`
+- Import GPX waypoints : déduplication par coordonnées (index unique `latitude, longitude, source`) — les points existants sont ignorés, les nouveaux ajoutés. Message d'import indique `X importé(s), Y ignoré(s)`.
 
 ---
 

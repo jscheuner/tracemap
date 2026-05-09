@@ -1096,19 +1096,23 @@
     const active = traces.find(t => !t.end_time);
     const traceId = active?.id || null;
     const headers = { 'Content-Type': 'application/json', 'x-session-token': sessionToken };
-    let total = 0, ok = true;
+    let totalInserted = 0, totalSkipped = 0, ok = true;
     if (tracks.length) {
       const res = await fetch(`${SECRET_PATH}/api/positions/ingest`, { method: 'POST', headers, body: JSON.stringify({ points: tracks, source: 'gpx_import', trace_id: traceId }) });
-      if (res.ok) { const d = await res.json(); total += d.inserted; } else ok = false;
+      if (res.ok) { const d = await res.json(); totalInserted += d.inserted; totalSkipped += (d.skipped || 0); } else ok = false;
     }
     if (waypoints.length) {
       const res = await fetch(`${SECRET_PATH}/api/positions/ingest`, { method: 'POST', headers, body: JSON.stringify({ points: waypoints, source: 'gpx_waypoint', trace_id: traceId }) });
-      if (res.ok) { const d = await res.json(); total += d.inserted; } else ok = false;
+      if (res.ok) { const d = await res.json(); totalInserted += d.inserted; totalSkipped += (d.skipped || 0); } else ok = false;
     }
     closeGPXModal();
     await loadPositions();
-    if (ok) alert(`${total} points importés !`);
-    else alert("Erreur partielle lors de l'import.");
+    if (ok) {
+      const msg = totalSkipped > 0
+        ? `${totalInserted} point(s) importé(s), ${totalSkipped} déjà existant(s) ignoré(s).`
+        : `${totalInserted} point(s) importé(s).`;
+      alert(msg);
+    } else alert("Erreur partielle lors de l'import.");
   }
 
   // ── QR Code ──────────────────────────────────────────────────

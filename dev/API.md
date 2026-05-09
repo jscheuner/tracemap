@@ -27,8 +27,9 @@ Paramètres query :
   "source": "phone_gps|gpx_import|gpx_waypoint",
   "trace_id": 1
 }
-→ { "success": true, "inserted": 42 }
+→ { "success": true, "inserted": 42, "skipped": 5 }
 ```
+Pour `source = "gpx_waypoint"` : déduplication par `(latitude, longitude)` — les points déjà existants aux mêmes coordonnées sont ignorés (`skipped`).
 
 ### PUT `/api/positions/:id`
 Modifier nom/catégorie d'un waypoint :

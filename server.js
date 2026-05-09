@@ -66,6 +66,7 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_timestamp ON positions(timestamp);
   CREATE INDEX IF NOT EXISTS idx_node ON positions(node_id);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_wpt_unique ON positions(latitude, longitude, source) WHERE source = 'gpx_waypoint';
 `);
 console.log('✅ Base de données SQLite initialisée');
 
@@ -555,16 +556,17 @@ app.post(`/${CONFIG.secretPath}/api/positions/ingest`, (req, res) => {
   const { points, trace_id, source = 'phone_gps' } = req.body;
   if (!Array.isArray(points) || points.length === 0) return res.status(400).json({ error: 'points doit être un tableau non vide' });
   const traceId = trace_id ? parseInt(trace_id) : (getCurrentTrace()?.id || ensureActiveTrace().id);
+  const isWaypoint = source === 'gpx_waypoint';
   const insert = db.prepare(`
-    INSERT INTO positions (node_id, node_name, latitude, longitude, altitude, speed, battery, timestamp, trace_id, source)
+    INSERT ${isWaypoint ? 'OR IGNORE' : ''} INTO positions (node_id, node_name, latitude, longitude, altitude, speed, battery, timestamp, trace_id, source)
     VALUES (@node_id, @node_name, @latitude, @longitude, @altitude, @speed, @battery, @timestamp, @trace_id, @source)
   `);
   const insertMany = db.transaction((pts) => {
-    let count = 0;
+    let inserted = 0, skipped = 0;
     for (const pt of pts) {
       if (pt.latitude == null || pt.longitude == null) continue;
       if (pt.latitude < -90 || pt.latitude > 90 || pt.longitude < -180 || pt.longitude > 180) continue;
-      insert.run({
+      const info = insert.run({
         node_id: pt.device_id || 'phone',
         node_name: pt.device_name || 'Téléphone',
         latitude: parseFloat(pt.latitude),
@@ -576,11 +578,11 @@ app.post(`/${CONFIG.secretPath}/api/positions/ingest`, (req, res) => {
         trace_id: traceId,
         source,
       });
-      count++;
+      if (info.changes > 0) inserted++; else skipped++;
     }
-    return count;
+    return { inserted, skipped };
   });
-  res.json({ success: true, inserted: insertMany(points) });
+  res.json({ success: true, ...insertMany(points) });
 });
 
 // ── Photos ───────────────────────────────────────────────────
