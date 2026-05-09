@@ -394,7 +394,9 @@
     <input type="text" id="wpt-edit-name" placeholder="Nom du point"/>
 
     <label style="margin-top:0.75rem; display:block;">Dossier / Catégorie</label>
-    <input type="text" id="wpt-edit-category" placeholder="Ex: Bivouacs, Restaurants…" style="margin-top:0.4rem;"/>
+    <select id="wpt-edit-category-select" style="margin-top:0.4rem; width:100%; padding:0.6rem 0.75rem; background:#0f172a; border:1px solid #334155; border-radius:8px; color:#e2e8f0; font-size:0.9rem; outline:none;" onchange="onCategorySelectChange()"></select>
+    <input type="text" id="wpt-edit-category" placeholder="Nom du dossier…" style="margin-top:0.4rem; display:none;"/>
+    <input type="hidden" id="wpt-edit-category-hidden"/>
 
     <label style="margin-top:0.75rem; display:block;">Date de création</label>
     <input type="datetime-local" id="wpt-edit-date" style="margin-top:0.4rem; width:100%; padding:0.6rem 0.75rem; background:#0f172a; border:1px solid #334155; border-radius:8px; color:#e2e8f0; font-size:0.9rem; outline:none; margin-bottom:0.75rem;"/>
@@ -468,6 +470,17 @@
           style="width:70px; padding:0.35rem 0.5rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#e2e8f0; font-size:0.9rem; outline:none; text-align:right;"
           onchange="saveSettings()"/>
         <span style="font-size:0.8rem; color:#64748b;">m</span>
+      </div>
+    </div>
+    <div style="padding:0.75rem 0;">
+      <div style="font-size:0.9rem; color:#e2e8f0; margin-bottom:0.5rem;">Dossiers prédéfinis</div>
+      <div style="font-size:0.78rem; color:#64748b; margin-bottom:0.6rem;">Disponibles dans la liste de choix lors de l'édition d'un point GPS</div>
+      <div id="settings-categories-list" style="display:flex; flex-wrap:wrap; gap:0.4rem; margin-bottom:0.6rem;"></div>
+      <div style="display:flex; gap:0.5rem;">
+        <input type="text" id="settings-new-category" placeholder="Nouveau dossier…"
+          style="flex:1; padding:0.45rem 0.65rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#e2e8f0; font-size:0.85rem; outline:none;"
+          onkeydown="if(event.key==='Enter')addSettingsCategory()"/>
+        <button class="btn btn-primary" onclick="addSettingsCategory()" style="padding:0.4rem 0.75rem;">Ajouter</button>
       </div>
     </div>
     <div class="modal-actions">
@@ -794,13 +807,87 @@
     });
   }
 
+  // ── Catégories waypoints ──────────────────────────────────────
+  let settingsCategories = [];
+
+  function getAllCategories() {
+    const fromWpts = [...new Set(positions.filter(p => p.source === 'gpx_waypoint').map(p => p.node_id).filter(Boolean))];
+    const merged = [...new Set([...settingsCategories, ...fromWpts])].sort((a, b) => a.localeCompare(b));
+    return merged;
+  }
+
+  function populateCategorySelect(currentValue) {
+    const sel = document.getElementById('wpt-edit-category-select');
+    const cats = getAllCategories();
+    sel.innerHTML = cats.map(c => `<option value="${escHtml(c)}" ${c === currentValue ? 'selected' : ''}>${escHtml(c)}</option>`).join('');
+    sel.innerHTML += `<option value="__new__" ${!cats.includes(currentValue) && currentValue ? 'selected' : ''}>✏️ Autre dossier…</option>`;
+    const isNew = !cats.includes(currentValue) && currentValue;
+    const input = document.getElementById('wpt-edit-category');
+    input.style.display = isNew ? '' : 'none';
+    if (isNew) input.value = currentValue;
+  }
+
+  function onCategorySelectChange() {
+    const sel = document.getElementById('wpt-edit-category-select');
+    const input = document.getElementById('wpt-edit-category');
+    if (sel.value === '__new__') {
+      input.style.display = '';
+      input.value = '';
+      setTimeout(() => input.focus(), 50);
+    } else {
+      input.style.display = 'none';
+    }
+  }
+
+  function getSelectedCategory() {
+    const sel = document.getElementById('wpt-edit-category-select');
+    if (sel.value === '__new__') return document.getElementById('wpt-edit-category').value.trim();
+    return sel.value;
+  }
+
+  function renderSettingsCategoriesList() {
+    const container = document.getElementById('settings-categories-list');
+    if (!container) return;
+    container.innerHTML = settingsCategories.length
+      ? settingsCategories.map(c => `
+          <span style="display:inline-flex;align-items:center;gap:0.3rem;background:#1e2d40;border:1px solid #334155;border-radius:20px;padding:0.2rem 0.6rem;font-size:0.8rem;color:#cbd5e1;">
+            ${escHtml(c)}
+            <button onclick="removeSettingsCategory('${escHtml(c)}')" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:0.75rem;padding:0;line-height:1;">✕</button>
+          </span>`).join('')
+      : '<span style="font-size:0.78rem;color:#475569;">Aucun dossier prédéfini</span>';
+  }
+
+  async function addSettingsCategory() {
+    const input = document.getElementById('settings-new-category');
+    const val = input.value.trim();
+    if (!val || settingsCategories.includes(val)) { input.value = ''; return; }
+    settingsCategories.push(val);
+    input.value = '';
+    renderSettingsCategoriesList();
+    await saveSettingsCategories();
+  }
+
+  async function removeSettingsCategory(cat) {
+    settingsCategories = settingsCategories.filter(c => c !== cat);
+    renderSettingsCategoriesList();
+    await saveSettingsCategories();
+  }
+
+  async function saveSettingsCategories() {
+    await fetch(`${SECRET_PATH}/api/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-session-token': sessionToken },
+      body: JSON.stringify({ wptCategories: settingsCategories }),
+    });
+  }
+
   // ── Édition waypoint ─────────────────────────────────────────
   function openWaypointEditModal(id) {
     const w = positions.find(p => p.id === id);
     if (!w) return;
     document.getElementById('wpt-edit-id').value = id;
     document.getElementById('wpt-edit-name').value = w.node_name || '';
-    document.getElementById('wpt-edit-category').value = w.node_id || '';
+    populateCategorySelect(w.node_id || '');
     document.getElementById('wpt-edit-lat').value = w.latitude?.toFixed(6) ?? '';
     document.getElementById('wpt-edit-lon').value = w.longitude?.toFixed(6) ?? '';
     document.getElementById('wpt-edit-alt').value = w.altitude != null ? Math.round(w.altitude) : '';
@@ -817,7 +904,7 @@
   async function saveWaypoint() {
     const id = document.getElementById('wpt-edit-id').value;
     const name = document.getElementById('wpt-edit-name').value.trim();
-    const category = document.getElementById('wpt-edit-category').value.trim();
+    const category = getSelectedCategory();
     const altVal = document.getElementById('wpt-edit-alt').value;
     const dateVal = document.getElementById('wpt-edit-date').value;
     if (!name) return;
@@ -1616,6 +1703,8 @@
         document.getElementById('setting-auto-rollover').checked = checked;
         updateToggleStyle(checked);
         document.getElementById('setting-photo-radius').value = s.photoMatchRadius || 50;
+        settingsCategories = JSON.parse(s.wptCategories || '[]');
+        renderSettingsCategoriesList();
       }
     } catch(e) {}
     document.getElementById('settings-modal').classList.remove('hidden');

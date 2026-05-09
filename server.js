@@ -95,6 +95,7 @@ db.exec(`CREATE TABLE IF NOT EXISTS photos (
 );`);
 db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run('autoRollover', 'true');
 db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run('photoMatchRadius', '50');
+db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run('wptCategories', '[]');
 
 function getSetting(key) {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
@@ -525,9 +526,10 @@ app.get(`/${CONFIG.secretPath}/api/settings`, (req, res) => {
 
 app.put(`/${CONFIG.secretPath}/api/settings`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
-  const { autoRollover, photoMatchRadius } = req.body;
+  const { autoRollover, photoMatchRadius, wptCategories } = req.body;
   if (autoRollover !== undefined) setSetting('autoRollover', autoRollover ? 'true' : 'false');
   if (photoMatchRadius !== undefined) setSetting('photoMatchRadius', String(parseInt(photoMatchRadius) || 50));
+  if (wptCategories !== undefined) setSetting('wptCategories', JSON.stringify(Array.isArray(wptCategories) ? wptCategories : []));
   res.json({ success: true });
 });
 
