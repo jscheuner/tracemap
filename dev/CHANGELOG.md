@@ -14,6 +14,13 @@
 - Dossier `dev/` : ARCHITECTURE.md, API.md, FEATURES.md, CHANGELOG.md
 - Bouton "✏️ Modifier" dans la bulle popup des waypoints → ouvre directement le modal d'édition
 - Modal édition waypoint : nom, dossier, date, lat/lon readonly, altitude
+- Date de création dans l'infobulle des waypoints
+- Bouton suppression dossier waypoints complet (avec confirmation mot de passe)
+- **Photos sur les waypoints** : upload, stockage fichier (`data/photos/{dossier}/`), table `photos` en DB
+  - Section photos dans le modal d'édition (miniatures + ajouter + supprimer)
+  - Import photo standalone avec extraction GPS EXIF et matching waypoint ≤ 50 m
+  - Bouton "📷 Photo" dans le toolbar
+- Packages : `exifr`, `multer`
 
 ### Modifié
 - Bouton info (ⓘ) fusionné dans le crayon (✏️) → ouvre modal détails

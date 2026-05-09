@@ -78,6 +78,37 @@ Supprime le tracé et tous ses points.
 
 ---
 
+## Photos
+
+Les photos sont stockées dans `data/photos/{dossier}/{id_wpt}_{timestamp}.ext` (hors DB).
+
+### POST `/api/photos/upload` (multipart `photo`)
+- Si `position_id` fourni : sauvegarde directe, retourne `{ id, filepath, gps }`
+- Sans `position_id` : sauvegarde en temp, extrait GPS EXIF, retourne candidats :
+```json
+{ "tempId": "abc123", "originalName": "img.jpg", "gps": { "lat": 46.1, "lon": 7.2 } | null,
+  "candidates": [{ "id": 42, "node_name": "Bivouac Col", "node_id": "Bivouacs", "dist": 23 }] }
+```
+Query param optionnel : `?radius=50` (mètres, défaut 50)
+
+### POST `/api/photos/confirm`
+Lie un fichier temp à un waypoint :
+```json
+{ "tempId": "abc123", "position_id": 42, "original_name": "img.jpg" }
+→ { "id": 7, "filepath": "Bivouacs/42_1746789012.jpg" }
+```
+
+### GET `/api/photos?position_id=42`
+Liste les photos d'un waypoint.
+
+### DELETE `/api/photos/:id`
+Supprime la photo (fichier + DB).
+
+### GET `/photos/{filepath}`
+Sert le fichier photo (authentifié, token en header ou `?token=`).
+
+---
+
 ## Divers
 
 ### GET `/api/last` — dernière position enregistrée

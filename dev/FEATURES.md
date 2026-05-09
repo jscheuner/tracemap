@@ -18,10 +18,15 @@
 - [x] Rollover automatique à minuit (désactivable dans paramètres)
 - [x] Protection par mot de passe pour la suppression
 
+### Waypoints / POI
+- [x] Edition et suppression de waypoints individuels
+- [x] Suppression d'un dossier complet (avec confirmation mot de passe)
+- [x] Photos sur les waypoints : ajout depuis le modal d'édition
+- [x] Import photo avec extraction GPS EXIF et matching automatique ≤ 50 m
+
 ### Interface admin
 - [x] Sidebar avec onglets Tracés / Points GPS
 - [x] Vue Points GPS groupée par dossier/catégorie, avec collapse
-- [x] Edition et suppression de waypoints individuels
 - [x] Toolbar en 3 zones (gestion tracés / période / outils)
 - [x] Filter bar : chips par source + dossiers POI + appareils GPS
 - [x] Rendu distinct losanges colorés pour waypoints (hors polyline)
