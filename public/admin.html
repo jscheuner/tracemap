@@ -866,7 +866,8 @@
       const preview = document.getElementById('photo-import-preview');
       preview.innerHTML = `<img src="${URL.createObjectURL(file)}" style="max-width:100%; max-height:160px; border-radius:6px; border:1px solid #334155;"/>`;
       const gpsInfo = document.getElementById('photo-import-gps-info');
-      gpsInfo.textContent = data.gps
+      const hasGps = data.gps && data.gps.lat != null && data.gps.lon != null;
+      gpsInfo.textContent = hasGps
         ? `📍 GPS trouvé (${data.gps.lat.toFixed(5)}, ${data.gps.lon.toFixed(5)}) — aucun waypoint dans le rayon.`
         : 'Aucune position GPS dans cette photo.';
       document.getElementById('photo-import-match-info').style.display = 'none';

@@ -605,7 +605,9 @@ app.post(`/${CONFIG.secretPath}/api/photos/upload`, uploadTmp.single('photo'), a
   try {
     const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000));
     const exif = await Promise.race([exifr.gps(file.path), timeout]);
-    if (exif && exif.latitude != null && exif.longitude != null) gps = { lat: exif.latitude, lon: exif.longitude };
+    if (exif && typeof exif.latitude === 'number' && typeof exif.longitude === 'number' && isFinite(exif.latitude) && isFinite(exif.longitude)) {
+      gps = { lat: exif.latitude, lon: exif.longitude };
+    }
   } catch (e) {}
 
   const ext = path.extname(file.originalname || '').toLowerCase() || '.jpg';
