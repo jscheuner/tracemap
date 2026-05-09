@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TraceMap</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; height: 100vh; display: flex; flex-direction: column; }
+
+    #login-screen { position: fixed; inset: 0; background: #0f172a; display: flex; align-items: center; justify-content: center; z-index: 9999; }
+    .login-card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 2.5rem; width: 340px; text-align: center; }
+    .login-card h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    .login-card p { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+    .login-card input { width: 100%; padding: 0.75rem 1rem; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0; font-size: 1rem; margin-bottom: 1rem; outline: none; }
+    .login-card input:focus { border-color: #3b82f6; }
+    .login-card button { width: 100%; padding: 0.75rem; background: #3b82f6; border: none; border-radius: 8px; color: white; font-size: 1rem; font-weight: 600; cursor: pointer; }
+    .login-card button:hover { background: #2563eb; }
+    .login-error { color: #f87171; font-size: 0.85rem; margin-top: 0.5rem; display: none; }
+
+    #header { background: #1e293b; border-bottom: 1px solid #334155; padding: 0.75rem 1.25rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+    #header h1 { font-size: 1.1rem; font-weight: 600; flex: 1; }
+    .badge { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 0.4rem 0.75rem; font-size: 0.8rem; color: #94a3b8; }
+    .badge span { color: #e2e8f0; font-weight: 500; }
+    .badge.online { border-color: #22c55e; }
+    .badge.online span { color: #22c55e; }
+
+    #controls { background: #1e293b; padding: 0.6rem 1.25rem; display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; border-bottom: 1px solid #334155; }
+    #controls label { font-size: 0.85rem; color: #94a3b8; }
+    #controls select { background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; padding: 0.3rem 0.6rem; font-size: 0.85rem; }
+    #controls select:disabled { opacity: 0.4; }
+    .sep { width: 1px; height: 20px; background: #334155; flex-shrink: 0; }
+    .btn { padding: 0.35rem 0.85rem; border-radius: 6px; border: none; font-size: 0.8rem; cursor: pointer; font-weight: 500; }
+    .btn-primary { background: #3b82f6; color: white; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-ghost { background: #334155; color: #e2e8f0; }
+    .btn-ghost:hover { background: #475569; }
+
+    #map { flex: 1; }
+
+    .leaflet-popup-content-wrapper { background: #1e293b; border: 1px solid #334155; border-radius: 10px; color: #e2e8f0; }
+    .leaflet-popup-tip { background: #1e293b; }
+    .popup-title { font-weight: 600; margin-bottom: 0.4rem; }
+    .popup-row { font-size: 0.85rem; color: #94a3b8; margin: 2px 0; }
+    .popup-row span { color: #e2e8f0; }
+
+    #info-panel { position: absolute; bottom: 20px; right: 10px; z-index: 1000; background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1rem; min-width: 200px; font-size: 0.85rem; }
+    #info-panel h3 { font-size: 0.9rem; margin-bottom: 0.75rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+    .info-row { display: flex; justify-content: space-between; gap: 1rem; margin: 0.3rem 0; }
+    .info-label { color: #94a3b8; }
+    .info-val { color: #e2e8f0; font-weight: 500; }
+    .battery-bar { height: 6px; background: #334155; border-radius: 3px; margin-top: 0.5rem; }
+    .battery-fill { height: 100%; border-radius: 3px; background: #22c55e; transition: width 0.3s; }
+
+    #legend { position: absolute; bottom: 20px; left: 10px; z-index: 1000; background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 0.75rem; font-size: 0.8rem; }
+    .legend-item { display: flex; align-items: center; gap: 0.5rem; margin: 0.25rem 0; }
+    .legend-dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; flex-shrink: 0; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<div id="login-screen">
+  <div class="login-card">
+    <h1>TraceMap</h1>
+    <p>Entrez le mot de passe pour accéder à la carte</p>
+    <input type="password" id="password-input" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')login()"/>
+    <button onclick="login()">Accéder à la carte</button>
+    <div class="login-error" id="login-error">Mot de passe incorrect</div>
+  </div>
+</div>
+
+<div id="header" class="hidden">
+  <h1>TraceMap</h1>
+  <div class="badge online"><span id="status-text">Connexion...</span></div>
+  <div class="badge">Dernière pos: <span id="last-time">—</span></div>
+  <div class="badge">Points: <span id="points-count">0</span></div>
+</div>
+
+<div id="controls" class="hidden">
+  <label>Tracé:</label>
+  <select id="trace-select" onchange="onTraceChange()">
+    <option value="">Dernières 24h</option>
+  </select>
+  <div class="sep"></div>
+  <label>Période:</label>
+  <select id="hours-select" onchange="loadPositions()">
+    <option value="6">6 heures</option>
+    <option value="24" selected>24 heures</option>
+    <option value="48">2 jours</option>
+    <option value="168">7 jours</option>
+    <option value="720">30 jours</option>
+  </select>
+  <div class="sep"></div>
+  <button class="btn btn-primary" onclick="loadPositions()">Actualiser</button>
+  <button class="btn btn-ghost" onclick="centerMap()">Centrer</button>
+  <button class="btn btn-ghost" onclick="toggleTrail()">Trajet</button>
+  <label style="margin-left:auto; display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+    <input type="checkbox" id="auto-refresh" checked onchange="toggleAutoRefresh()"/> Auto-refresh
+  </label>
+</div>
+
+<div id="map" class="hidden"></div>
+
+<div id="legend" class="hidden">
+  <div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div> LilyGo (LoRa)</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#22c55e"></div> Téléphone</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#f97316"></div> OsmAnd GPX</div>
+</div>
+
+<div id="info-panel" class="hidden">
+  <h3>Dernière position</h3>
+  <div class="info-row"><span class="info-label">Appareil</span><span class="info-val" id="i-node">—</span></div>
+  <div class="info-row"><span class="info-label">Source</span><span class="info-val" id="i-source">—</span></div>
+  <div class="info-row"><span class="info-label">Lat</span><span class="info-val" id="i-lat">—</span></div>
+  <div class="info-row"><span class="info-label">Lon</span><span class="info-val" id="i-lon">—</span></div>
+  <div class="info-row"><span class="info-label">Altitude</span><span class="info-val" id="i-alt">—</span></div>
+  <div class="info-row"><span class="info-label">Vitesse</span><span class="info-val" id="i-speed">—</span></div>
+  <div class="info-row"><span class="info-label">Heure</span><span class="info-val" id="i-time">—</span></div>
+  <div class="info-row"><span class="info-label">Batterie</span><span class="info-val" id="i-bat">—</span></div>
+  <div class="battery-bar"><div class="battery-fill" id="bat-fill" style="width:0%"></div></div>
+</div>
+
+<script>
+  const SECRET_PATH = window.location.pathname.replace(/\/$/, '').replace(/\/admin$/, '');
+  let sessionToken = localStorage.getItem('mesh_session');
+  let map, polyline, markers = [], positions = [], traces = [];
+  let showTrail = true, autoRefreshTimer = null;
+
+  const SOURCE_COLORS = { meshtastic_mqtt: '#3b82f6', phone_gps: '#22c55e', gpx_import: '#f97316' };
+  const SOURCE_LABELS = { meshtastic_mqtt: 'LilyGo (LoRa)', phone_gps: 'Téléphone', gpx_import: 'OsmAnd GPX' };
+
+  async function login() {
+    const pw = document.getElementById('password-input').value;
+    const res = await fetch(`${SECRET_PATH}/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw }) });
+    const data = await res.json();
+    if (data.success) { sessionToken = data.token; localStorage.setItem('mesh_session', sessionToken); showApp(); }
+    else document.getElementById('login-error').style.display = 'block';
+  }
+
+  function showApp() {
+    document.getElementById('login-screen').classList.add('hidden');
+    ['header','controls','map','legend','info-panel'].forEach(id => document.getElementById(id).classList.remove('hidden'));
+    initMap(); loadTraces(); loadPositions(); startAutoRefresh();
+  }
+
+  async function checkSession() {
+    if (!sessionToken) return;
+    try { const res = await fetch(`${SECRET_PATH}/api/last?token=${sessionToken}`); if (res.ok) showApp(); } catch {}
+  }
+
+  function initMap() {
+    map = L.map('map').setView([46.73, 6.52], 10);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors', maxZoom: 19 }).addTo(map);
+  }
+
+  function getMarkerIcon(source, isLast, traceColor) {
+    const color = traceColor || SOURCE_COLORS[source] || '#94a3b8';
+    const size = isLast ? 18 : 12, border = isLast ? 3 : 2;
+    return L.divIcon({ html: `<div style="background:${color};width:${size}px;height:${size}px;border-radius:50%;border:${border}px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4)"></div>`, iconSize: [size, size], iconAnchor: [size/2, size/2] });
+  }
+
+  async function loadTraces() {
+    try {
+      const res = await fetch(`${SECRET_PATH}/api/traces`, { headers: { 'x-session-token': sessionToken } });
+      if (!res.ok) return;
+      traces = await res.json();
+      const sel = document.getElementById('trace-select');
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">Dernières 24h</option>';
+      traces.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        const date = new Date(t.start_time * 1000).toLocaleDateString('fr-CH');
+        opt.textContent = `${t.name}${t.end_time ? '' : ' ●'} (${date})`;
+        sel.appendChild(opt);
+      });
+      if (cur) sel.value = cur;
+    } catch {}
+  }
+
+  function onTraceChange() {
+    document.getElementById('hours-select').disabled = !!document.getElementById('trace-select').value;
+    loadPositions();
+  }
+
+  async function loadPositions() {
+    const traceId = document.getElementById('trace-select').value;
+    const hours = document.getElementById('hours-select').value;
+    const url = traceId ? `${SECRET_PATH}/api/positions?trace_id=${traceId}` : `${SECRET_PATH}/api/positions?hours=${hours}`;
+    try {
+      const res = await fetch(url, { headers: { 'x-session-token': sessionToken } });
+      if (res.status === 401) { localStorage.removeItem('mesh_session'); location.reload(); return; }
+      positions = await res.json();
+      updateMap();
+    } catch { document.getElementById('status-text').textContent = 'Erreur réseau'; }
+  }
+
+  function getActiveTraceColor() {
+    const traceId = document.getElementById('trace-select').value;
+    if (!traceId) return null;
+    const t = traces.find(t => t.id == traceId);
+    return t?.color || null;
+  }
+
+  function updateMap() {
+    markers.forEach(m => map.removeLayer(m)); markers = [];
+    if (polyline) map.removeLayer(polyline);
+    if (!positions.length) { document.getElementById('status-text').textContent = 'Aucune position'; document.getElementById('points-count').textContent = '0'; return; }
+    const traceColor = getActiveTraceColor();
+    if (showTrail) polyline = L.polyline(positions.map(p => [p.latitude, p.longitude]), { color: traceColor || '#3b82f6', weight: 3, opacity: 0.7 }).addTo(map);
+    positions.slice(0,-1).forEach(p => markers.push(L.marker([p.latitude,p.longitude],{icon:getMarkerIcon(p.source,false,traceColor)}).addTo(map).bindPopup(buildPopup(p))));
+    const last = positions[positions.length-1];
+    markers.push(L.marker([last.latitude,last.longitude],{icon:getMarkerIcon(last.source,true,traceColor)}).addTo(map).bindPopup(buildPopup(last)).openPopup());
+    updateInfoPanel(last);
+    document.getElementById('status-text').textContent = 'En ligne';
+    document.getElementById('points-count').textContent = positions.length;
+  }
+
+  function buildPopup(p) {
+    return `<div class="popup-title">${p.node_name||p.node_id}</div>
+      <div class="popup-row">Source: <span>${SOURCE_LABELS[p.source]||'—'}</span></div>
+      <div class="popup-row">Heure: <span>${new Date(p.timestamp*1000).toLocaleString('fr-CH')}</span></div>
+      <div class="popup-row">Position: <span>${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}</span></div>
+      ${p.altitude?`<div class="popup-row">Altitude: <span>${p.altitude}m</span></div>`:''}
+      ${p.speed?`<div class="popup-row">Vitesse: <span>${p.speed} km/h</span></div>`:''}
+      ${p.battery?`<div class="popup-row">Batterie: <span>${p.battery}%</span></div>`:''}`;
+  }
+
+  function updateInfoPanel(p) {
+    const date = new Date(p.timestamp*1000);
+    document.getElementById('i-node').textContent = p.node_name||p.node_id;
+    document.getElementById('i-source').textContent = SOURCE_LABELS[p.source]||'—';
+    document.getElementById('i-lat').textContent = p.latitude.toFixed(5);
+    document.getElementById('i-lon').textContent = p.longitude.toFixed(5);
+    document.getElementById('i-alt').textContent = p.altitude?`${p.altitude}m`:'—';
+    document.getElementById('i-speed').textContent = p.speed?`${p.speed} km/h`:'—';
+    document.getElementById('i-time').textContent = date.toLocaleTimeString('fr-CH');
+    document.getElementById('last-time').textContent = date.toLocaleTimeString('fr-CH');
+    document.getElementById('i-bat').textContent = p.battery?`${p.battery}%`:'—';
+    document.getElementById('bat-fill').style.width = (p.battery||0)+'%';
+    document.getElementById('bat-fill').style.background = p.battery>30?'#22c55e':'#ef4444';
+  }
+
+  function centerMap() { if (!positions.length) return; const l=positions[positions.length-1]; map.setView([l.latitude,l.longitude],14); }
+  function toggleTrail() { showTrail=!showTrail; updateMap(); }
+
+  function startAutoRefresh() {
+    autoRefreshTimer = setInterval(() => { if (document.getElementById('auto-refresh').checked) { loadPositions(); loadTraces(); } }, 30000);
+  }
+  function toggleAutoRefresh() {
+    if (!document.getElementById('auto-refresh').checked) clearInterval(autoRefreshTimer); else startAutoRefresh();
+  }
+
+  checkSession();
+</script>
+</body>
+</html>

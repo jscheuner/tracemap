@@ -1,0 +1,7 @@
+node_modules/
+data/
+*.db
+config.local.js
+.claude/
+{public,data}/
+*.log

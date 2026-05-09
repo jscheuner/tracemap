@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0f172a">
+  <title>GPS Tracker</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100dvh; display: flex; flex-direction: column; }
+
+    header { background: #1e293b; border-bottom: 1px solid #334155; padding: 1rem 1.25rem; display: flex; align-items: center; gap: 0.75rem; }
+    header h1 { font-size: 1.05rem; font-weight: 600; flex: 1; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; background: #475569; }
+    .dot.green { background: #22c55e; animation: blink 2s infinite; }
+    .dot.yellow { background: #f59e0b; animation: blink 1s infinite; }
+    .dot.red { background: #ef4444; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+    main { flex: 1; padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem; overflow-y: auto; }
+
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.1rem; }
+    .card-title { font-size: 0.75rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.9rem; font-weight: 600; }
+
+    .big-num { font-size: 2.8rem; font-weight: 700; line-height: 1; }
+    .big-lbl { font-size: 0.78rem; color: #64748b; margin-top: 0.2rem; }
+
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.9rem; }
+    .stat { background: #0f172a; border-radius: 8px; padding: 0.65rem 0.75rem; }
+    .stat .v { font-size: 1rem; font-weight: 600; }
+    .stat .l { font-size: 0.72rem; color: #64748b; margin-top: 0.15rem; }
+
+    .btn { display: block; width: 100%; padding: 0.8rem; border-radius: 10px; border: none; font-size: 0.95rem; font-weight: 600; cursor: pointer; margin-bottom: 0.6rem; transition: opacity 0.15s; }
+    .btn:last-child { margin-bottom: 0; }
+    .btn:active { opacity: 0.7; }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .btn-green { background: #22c55e; color: #fff; }
+    .btn-red { background: #ef4444; color: #fff; }
+    .btn-blue { background: #3b82f6; color: #fff; }
+    .btn-gray { background: #334155; color: #e2e8f0; }
+
+    .pending-badge { display: inline-block; background: #f59e0b; color: #0f172a; border-radius: 20px; padding: 0.05rem 0.45rem; font-size: 0.75rem; font-weight: 700; margin-left: 0.4rem; vertical-align: middle; }
+
+    label { display: block; font-size: 0.78rem; color: #94a3b8; margin-bottom: 0.25rem; margin-top: 0.5rem; }
+    label:first-child { margin-top: 0; }
+    input[type=text], input[type=password] { display: block; width: 100%; padding: 0.6rem 0.75rem; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0; font-size: 0.9rem; outline: none; }
+    input:focus { border-color: #3b82f6; }
+
+    .log { background: #0f172a; border-radius: 8px; padding: 0.65rem; font-size: 0.72rem; font-family: monospace; max-height: 140px; overflow-y: auto; }
+    .log-line { padding: 0.1rem 0; border-bottom: 1px solid #1a2535; color: #64748b; }
+    .log-line:last-child { border: none; }
+    .log-line.ok { color: #22c55e; }
+    .log-line.err { color: #f87171; }
+    .log-line.info { color: #94a3b8; }
+
+    #net-badge { font-size: 0.72rem; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="dot" id="gps-dot"></div>
+  <h1>GPS Tracker</h1>
+  <span id="net-badge" style="color:#64748b">—</span>
+</header>
+
+<main>
+
+  <!-- Config -->
+  <div class="card" id="setup-card">
+    <div class="card-title">Configuration</div>
+    <label>URL du serveur (sans / final)</label>
+    <input type="text" id="cfg-url" placeholder="https://mesh.example.com/monSecret"/>
+    <label>Token de session (copier depuis le navigateur)</label>
+    <input type="password" id="cfg-token" placeholder="Token"/>
+    <label>Nom de l'appareil</label>
+    <input type="text" id="cfg-device" placeholder="Samsung S24"/>
+    <br>
+    <button class="btn btn-blue" onclick="saveConfig()">Enregistrer et démarrer</button>
+  </div>
+
+  <!-- GPS Status -->
+  <div class="card" id="gps-card" style="display:none">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.9rem;">
+      <div class="card-title" style="margin-bottom:0;">Position GPS</div>
+      <button onclick="sendNow()" style="padding:0.3rem 0.7rem; background:#3b82f6; color:white; border:none; border-radius:6px; font-size:0.78rem; font-weight:600; cursor:pointer;" id="send-now-btn">Envoyer</button>
+    </div>
+    <div class="big-num" id="accuracy-val">—</div>
+    <div class="big-lbl">précision (mètres)</div>
+    <div class="grid2">
+      <div class="stat"><div class="v" id="lat-val">—</div><div class="l">Latitude</div></div>
+      <div class="stat"><div class="v" id="lon-val">—</div><div class="l">Longitude</div></div>
+      <div class="stat"><div class="v" id="alt-val">—</div><div class="l">Altitude (m)</div></div>
+      <div class="stat"><div class="v" id="speed-val">—</div><div class="l">Vitesse (km/h)</div></div>
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div class="card" id="actions-card" style="display:none;">
+    <div class="card-title">Contrôles</div>
+    <button class="btn btn-green" id="start-btn" onclick="startTracking()">Démarrer le suivi GPS</button>
+    <button class="btn btn-red" id="stop-btn" onclick="stopTracking()" style="display:none">Arrêter le suivi</button>
+    <button class="btn btn-blue" onclick="syncNow()">
+      Synchroniser maintenant
+      <span class="pending-badge" id="pending-badge" style="display:none">0</span>
+    </button>
+    <button class="btn btn-gray" onclick="clearPending()">Vider la file d'attente</button>
+    <button class="btn btn-gray" onclick="resetConfig()" style="margin-top:0.3rem; font-size:0.8rem; padding:0.5rem;">Réinitialiser la config</button>
+  </div>
+
+  <!-- Paramètres de capture -->
+  <div class="card" id="settings-card" style="display:none">
+    <div class="card-title">Paramètres de capture</div>
+
+    <label>Préréglage</label>
+    <select id="cfg-preset" onchange="applyPreset()" style="width:100%; padding:0.6rem 0.75rem; background:#0f172a; border:1px solid #334155; border-radius:8px; color:#e2e8f0; font-size:0.9rem; outline:none; margin-bottom:0.75rem;">
+      <option value="">-- Personnalisé --</option>
+      <option value="hike">Randonnée à pied — 30s / 10m / 50m</option>
+      <option value="car">En voiture — 10s / 50m / 80m</option>
+      <option value="static">Position statique — 60s / 0m / 100m</option>
+      <option value="precise">Trace précise — 5s / 5m / 30m</option>
+    </select>
+
+    <label>Intervalle minimum entre deux points</label>
+    <div style="display:flex; align-items:center; gap:0.75rem;">
+      <input type="range" id="cfg-interval" min="5" max="300" step="5" value="30" oninput="document.getElementById('cfg-preset').value=''; updateSettingsDisplay()" style="flex:1; accent-color:#3b82f6;">
+      <span id="lbl-interval" style="min-width:55px; text-align:right; font-weight:600;">30s</span>
+    </div>
+
+    <label style="margin-top:0.9rem;">Déplacement minimum pour enregistrer</label>
+    <div style="display:flex; align-items:center; gap:0.75rem;">
+      <input type="range" id="cfg-dist" min="0" max="200" step="5" value="10" oninput="document.getElementById('cfg-preset').value=''; updateSettingsDisplay()" style="flex:1; accent-color:#3b82f6;">
+      <span id="lbl-dist" style="min-width:55px; text-align:right; font-weight:600;">10m</span>
+    </div>
+
+    <label style="margin-top:0.9rem;">Précision GPS minimale requise</label>
+    <div style="display:flex; align-items:center; gap:0.75rem;">
+      <input type="range" id="cfg-accuracy" min="10" max="200" step="10" value="80" oninput="document.getElementById('cfg-preset').value=''; updateSettingsDisplay()" style="flex:1; accent-color:#3b82f6;">
+      <span id="lbl-accuracy" style="min-width:55px; text-align:right; font-weight:600;">80m</span>
+    </div>
+
+    <div style="margin-top:1rem; padding:0.65rem; background:#0f172a; border-radius:8px; font-size:0.78rem; color:#64748b;">
+      Un point est enregistré si le GPS est précis à <strong id="sum-acc" style="color:#e2e8f0">80m</strong> près,
+      que <strong id="sum-int" style="color:#e2e8f0">30s</strong> se sont écoulées
+      et que vous avez bougé d'au moins <strong id="sum-dist" style="color:#e2e8f0">10m</strong>.
+    </div>
+
+    <button class="btn btn-blue" style="margin-top:0.9rem;" onclick="saveSettings()">Appliquer</button>
+  </div>
+
+  <!-- Journal -->
+  <div class="card" id="log-card" style="display:none">
+    <div class="card-title">Journal</div>
+    <div class="log" id="log-box"></div>
+  </div>
+
+</main>
+
+<script>
+  const QUEUE_KEY = 'gps_queue';
+  const CONFIG_KEY = 'gps_config';
+  const DEVICE_ID_KEY = 'gps_device_id';
+  const SETTINGS_KEY = 'gps_settings';
+
+  let MIN_DIST_M = 10;
+  let MIN_INTERVAL_S = 30;
+  let MAX_ACCURACY_M = 80;
+  let lastPoint = null;
+
+  let config = null;
+  let deviceId = null;
+  let watchId = null;
+  let pending = [];
+  let lastPos = null;
+  let lastSent = 0;
+  let syncing = false;
+
+  function init() {
+    deviceId = localStorage.getItem(DEVICE_ID_KEY);
+    if (!deviceId) {
+      deviceId = 'phone_' + Math.random().toString(36).slice(2, 10);
+      localStorage.setItem(DEVICE_ID_KEY, deviceId);
+    }
+
+    // Auto-config depuis QR code (params d'URL)
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('url') && params.get('token')) {
+      config = {
+        url: params.get('url'),
+        token: params.get('token'),
+        deviceName: params.get('name') || 'Téléphone',
+      };
+      localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+      // Nettoyer l'URL sans recharger
+      history.replaceState({}, '', '/phone-tracker.html');
+      log('Config chargée depuis QR code', 'ok');
+    } else {
+      const raw = localStorage.getItem(CONFIG_KEY);
+      if (raw) config = JSON.parse(raw);
+    }
+
+    if (config) {
+      document.getElementById('cfg-url').value = config.url || '';
+      document.getElementById('cfg-token').value = config.token || '';
+      document.getElementById('cfg-device').value = config.deviceName || '';
+    }
+
+    const rawQ = localStorage.getItem(QUEUE_KEY);
+    if (rawQ) pending = JSON.parse(rawQ);
+    updateBadge();
+
+    updateNet();
+    window.addEventListener('online', () => { updateNet(); syncNow(); });
+    window.addEventListener('offline', updateNet);
+    setInterval(syncNow, 30000);
+
+    loadSettings();
+    if (config?.url && config?.token) showTrackingUI();
+  }
+
+  function loadSettings() {
+    const saved = localStorage.getItem(SETTINGS_KEY);
+    if (saved) {
+      const s = JSON.parse(saved);
+      MIN_INTERVAL_S = s.interval ?? 30;
+      MIN_DIST_M = s.dist ?? 10;
+      MAX_ACCURACY_M = s.accuracy ?? 80;
+    }
+    document.getElementById('cfg-interval').value = MIN_INTERVAL_S;
+    document.getElementById('cfg-dist').value = MIN_DIST_M;
+    document.getElementById('cfg-accuracy').value = MAX_ACCURACY_M;
+    // Retrouver le preset correspondant s'il existe
+    const matchedPreset = Object.entries(PRESETS || {}).find(([, p]) =>
+      p.interval === MIN_INTERVAL_S && p.dist === MIN_DIST_M && p.accuracy === MAX_ACCURACY_M
+    );
+    document.getElementById('cfg-preset').value = matchedPreset ? matchedPreset[0] : '';
+    updateSettingsDisplay();
+  }
+
+  function updateSettingsDisplay() {
+    const interval = parseInt(document.getElementById('cfg-interval').value);
+    const dist = parseInt(document.getElementById('cfg-dist').value);
+    const accuracy = parseInt(document.getElementById('cfg-accuracy').value);
+    document.getElementById('lbl-interval').textContent = interval >= 60 ? `${Math.round(interval/60)}min` : `${interval}s`;
+    document.getElementById('lbl-dist').textContent = dist === 0 ? 'aucun' : `${dist}m`;
+    document.getElementById('lbl-accuracy').textContent = `${accuracy}m`;
+    document.getElementById('sum-int').textContent = interval >= 60 ? `${Math.round(interval/60)} min` : `${interval}s`;
+    document.getElementById('sum-dist').textContent = dist === 0 ? 'aucun' : `${dist}m`;
+    document.getElementById('sum-acc').textContent = `${accuracy}m`;
+  }
+
+  const PRESETS = {
+    hike:    { interval: 30,  dist: 10,  accuracy: 50  },
+    car:     { interval: 10,  dist: 50,  accuracy: 80  },
+    static:  { interval: 60,  dist: 0,   accuracy: 100 },
+    precise: { interval: 5,   dist: 5,   accuracy: 30  },
+  };
+
+  function applyPreset() {
+    const key = document.getElementById('cfg-preset').value;
+    if (!key || !PRESETS[key]) return;
+    const p = PRESETS[key];
+    document.getElementById('cfg-interval').value = p.interval;
+    document.getElementById('cfg-dist').value = p.dist;
+    document.getElementById('cfg-accuracy').value = p.accuracy;
+    updateSettingsDisplay();
+  }
+
+  function saveSettings() {
+    MIN_INTERVAL_S = parseInt(document.getElementById('cfg-interval').value);
+    MIN_DIST_M = parseInt(document.getElementById('cfg-dist').value);
+    MAX_ACCURACY_M = parseInt(document.getElementById('cfg-accuracy').value);
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ interval: MIN_INTERVAL_S, dist: MIN_DIST_M, accuracy: MAX_ACCURACY_M }));
+    log(`Paramètres: toutes les ${MIN_INTERVAL_S}s, min ${MIN_DIST_M}m, précision <${MAX_ACCURACY_M}m`, 'ok');
+  }
+
+  function updateNet() {
+    const el = document.getElementById('net-badge');
+    el.textContent = navigator.onLine ? 'En ligne' : 'Hors ligne';
+    el.style.color = navigator.onLine ? '#22c55e' : '#f87171';
+  }
+
+  function saveConfig() {
+    const url = document.getElementById('cfg-url').value.trim().replace(/\/$/, '');
+    const token = document.getElementById('cfg-token').value.trim();
+    const deviceName = document.getElementById('cfg-device').value.trim() || 'Téléphone';
+    if (!url || !token) { log('URL et token requis', 'err'); return; }
+    config = { url, token, deviceName };
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+    log(`Config enregistrée — appareil: ${deviceName}`, 'ok');
+    showTrackingUI();
+  }
+
+  function showTrackingUI() {
+    document.getElementById('setup-card').style.display = 'none';
+    document.getElementById('gps-card').style.display = 'block';
+    document.getElementById('actions-card').style.display = 'block';
+    document.getElementById('settings-card').style.display = 'block';
+    document.getElementById('log-card').style.display = 'block';
+    log(`Serveur: ${config.url}`, 'info');
+    log(`ID appareil: ${deviceId}`, 'info');
+  }
+
+  function resetConfig() {
+    stopTracking();
+    config = null;
+    localStorage.removeItem(CONFIG_KEY);
+    document.getElementById('setup-card').style.display = 'block';
+    document.getElementById('gps-card').style.display = 'none';
+    document.getElementById('actions-card').style.display = 'none';
+    document.getElementById('log-card').style.display = 'none';
+  }
+
+  // ── GPS ──────────────────────────────────────────────────
+  function startTracking() {
+    if (!navigator.geolocation) { log('GPS non disponible', 'err'); return; }
+    setDot('yellow');
+    document.getElementById('start-btn').style.display = 'none';
+    document.getElementById('stop-btn').style.display = 'block';
+    log('Démarrage du GPS...', 'info');
+    watchId = navigator.geolocation.watchPosition(onGPS, onGPSErr, {
+      enableHighAccuracy: true, maximumAge: 5000, timeout: 20000
+    });
+  }
+
+  function stopTracking() {
+    if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+    setDot('gray');
+    document.getElementById('start-btn').style.display = 'block';
+    document.getElementById('stop-btn').style.display = 'none';
+    log('Suivi arrêté', 'info');
+  }
+
+  function onGPS(pos) {
+    const { latitude, longitude, altitude, speed, accuracy } = pos.coords;
+    const now = Math.floor(Date.now() / 1000);
+
+    setDot(accuracy < 30 ? 'green' : 'yellow');
+    document.getElementById('accuracy-val').textContent = Math.round(accuracy);
+    document.getElementById('lat-val').textContent = latitude.toFixed(5);
+    document.getElementById('lon-val').textContent = longitude.toFixed(5);
+    document.getElementById('alt-val').textContent = altitude != null ? Math.round(altitude) : '—';
+    document.getElementById('speed-val').textContent = speed != null ? Math.round(speed * 3.6) : '—';
+
+    // Toujours mémoriser le dernier point connu (pour envoi manuel)
+    lastPoint = {
+      latitude, longitude,
+      altitude: altitude != null ? Math.round(altitude) : null,
+      speed: speed != null ? Math.round(speed * 3.6) : null,
+      timestamp: now,
+      device_id: deviceId,
+      device_name: config.deviceName,
+    };
+
+    if (accuracy > MAX_ACCURACY_M) return;
+    if (now - lastSent < MIN_INTERVAL_S) return;
+    if (lastPos && haversine(lastPos[0], lastPos[1], latitude, longitude) < MIN_DIST_M) return;
+
+    const pt = {
+      latitude, longitude,
+      altitude: altitude != null ? Math.round(altitude) : null,
+      speed: speed != null ? Math.round(speed * 3.6) : null,
+      timestamp: now,
+      device_id: deviceId,
+      device_name: config.deviceName,
+    };
+
+    pending.push(pt);
+    saveQueue();
+    updateBadge();
+    lastSent = now;
+    lastPos = [latitude, longitude];
+    log(`Point GPS (précision ${Math.round(accuracy)}m)`, 'ok');
+    if (navigator.onLine) syncNow();
+  }
+
+  function onGPSErr(err) {
+    setDot('red');
+    const msgs = { 1: 'Permission GPS refusée', 2: 'Position indisponible', 3: 'Timeout GPS' };
+    log(msgs[err.code] || `Erreur GPS: ${err.message}`, 'err');
+  }
+
+  async function sendNow() {
+    if (!lastPoint) { log('Pas encore de position GPS disponible', 'err'); return; }
+    const btn = document.getElementById('send-now-btn');
+    btn.disabled = true;
+    btn.textContent = '...';
+    const pt = { ...lastPoint, timestamp: Math.floor(Date.now() / 1000) };
+    try {
+      const res = await fetch(`${config.url}/api/positions/ingest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-session-token': config.token },
+        body: JSON.stringify({ points: [pt], source: 'phone_gps' })
+      });
+      if (res.ok) {
+        log(`Position envoyée manuellement (${pt.latitude.toFixed(5)}, ${pt.longitude.toFixed(5)})`, 'ok');
+      } else if (res.status === 401) {
+        log('Token expiré — re-scannez le QR code depuis le PC', 'err');
+      } else {
+        log(`Erreur serveur ${res.status}`, 'err');
+      }
+    } catch (e) {
+      log(`Échec: ${e.message}`, 'err');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Envoyer';
+    }
+  }
+
+  // ── Sync ─────────────────────────────────────────────────
+  async function syncNow() {
+    if (!config || !navigator.onLine || pending.length === 0 || syncing) return;
+    syncing = true;
+    const batch = [...pending];
+    try {
+      const res = await fetch(`${config.url}/api/positions/ingest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-session-token': config.token },
+        body: JSON.stringify({ points: batch, source: 'phone_gps' })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        pending.splice(0, batch.length);
+        saveQueue();
+        updateBadge();
+        log(`Sync OK — ${data.inserted} points envoyés`, 'ok');
+      } else if (res.status === 401) {
+        log('Token expiré — re-scannez le QR code depuis le PC', 'err');
+      } else {
+        log(`Erreur serveur ${res.status}`, 'err');
+      }
+    } catch (e) {
+      log(`Sync échouée: ${e.message}`, 'err');
+    } finally {
+      syncing = false;
+    }
+  }
+
+  function saveQueue() {
+    if (pending.length > 10000) pending = pending.slice(-10000);
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(pending));
+  }
+
+  function updateBadge() {
+    const el = document.getElementById('pending-badge');
+    el.textContent = pending.length;
+    el.style.display = pending.length > 0 ? 'inline-block' : 'none';
+  }
+
+  function clearPending() {
+    if (!confirm(`Supprimer ${pending.length} points en attente ?`)) return;
+    pending = [];
+    saveQueue();
+    updateBadge();
+    log('File vidée', 'info');
+  }
+
+  // ── Utils ─────────────────────────────────────────────────
+  function setDot(color) {
+    const el = document.getElementById('gps-dot');
+    el.className = 'dot ' + (color === 'gray' ? '' : color);
+  }
+
+  function haversine(lat1, lon1, lat2, lon2) {
+    const R = 6371000, d2r = Math.PI / 180;
+    const dLat = (lat2 - lat1) * d2r, dLon = (lon2 - lon1) * d2r;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * d2r) * Math.cos(lat2 * d2r) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  function log(msg, type = 'info') {
+    const box = document.getElementById('log-box');
+    const time = new Date().toLocaleTimeString('fr-CH');
+    const div = document.createElement('div');
+    div.className = `log-line ${type}`;
+    div.textContent = `[${time}] ${msg}`;
+    box.insertBefore(div, box.firstChild);
+    while (box.children.length > 60) box.removeChild(box.lastChild);
+  }
+
+  init();
+</script>
+</body>
+</html>

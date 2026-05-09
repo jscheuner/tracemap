@@ -1,0 +1,21 @@
+# Service systemd pour démarrage automatique
+# À placer dans /etc/systemd/system/tracemap.service
+
+[Unit]
+Description=TraceMap - Multi-source GPS Tracker
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/tracemap
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=tracemap
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — TraceMap</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+    /* ── Login ── */
+    #login-screen { position: fixed; inset: 0; background: #0f172a; display: flex; align-items: center; justify-content: center; z-index: 9999; }
+    .login-card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 2.5rem; width: 340px; text-align: center; }
+    .login-card h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    .login-card p { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+    .login-card input { width: 100%; padding: 0.75rem 1rem; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0; font-size: 1rem; margin-bottom: 1rem; outline: none; }
+    .login-card input:focus { border-color: #3b82f6; }
+    .login-card button { width: 100%; padding: 0.75rem; background: #3b82f6; border: none; border-radius: 8px; color: white; font-size: 1rem; font-weight: 600; cursor: pointer; }
+    .login-card button:hover { background: #2563eb; }
+    .login-error { color: #f87171; font-size: 0.85rem; margin-top: 0.5rem; display: none; }
+
+    /* ── Header ── */
+    #header { background: #1e293b; border-bottom: 1px solid #334155; padding: 0.65rem 1.25rem; display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0; }
+    #header h1 { font-size: 1rem; font-weight: 600; flex: 1; }
+    .badge { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 0.35rem 0.65rem; font-size: 0.78rem; color: #94a3b8; }
+    .badge span { color: #e2e8f0; font-weight: 500; }
+    .badge.online { border-color: #22c55e; }
+    .badge.online span { color: #22c55e; }
+    .admin-badge { background: #7c3aed; border: none; border-radius: 6px; padding: 0.25rem 0.6rem; font-size: 0.7rem; font-weight: 700; color: white; letter-spacing: 0.05em; }
+
+    /* ── Layout ── */
+    #app-body { flex: 1; display: flex; overflow: hidden; }
+
+    /* ── Sidebar ── */
+    #sidebar { width: 290px; flex-shrink: 0; background: #1a2535; border-right: 1px solid #334155; display: flex; flex-direction: column; overflow: hidden; transition: width 0.2s ease; }
+    #sidebar.collapsed { width: 0; }
+    #sidebar-header { padding: 0.5rem 0.75rem 0; border-bottom: 1px solid #334155; display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; flex-direction: column; }
+    #sidebar-tabs { display: flex; width: 100%; gap: 0; }
+    .sidebar-tab { flex: 1; background: transparent; border: none; border-bottom: 2px solid transparent; color: #475569; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; cursor: pointer; padding: 0.4rem 0.5rem; transition: all 0.15s; }
+    .sidebar-tab.active { color: #3b82f6; border-bottom-color: #3b82f6; }
+    .sidebar-tab:hover:not(.active) { color: #94a3b8; }
+    #sidebar-top-row { display: flex; align-items: center; width: 100%; padding-bottom: 0.4rem; }
+    #sidebar-title { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; flex: 1; }
+    #traces-list, #waypoints-list { flex: 1; overflow-y: auto; padding: 0.5rem; }
+    #traces-list::-webkit-scrollbar, #waypoints-list::-webkit-scrollbar { width: 4px; }
+    #traces-list::-webkit-scrollbar-track, #waypoints-list::-webkit-scrollbar-track { background: transparent; }
+    #traces-list::-webkit-scrollbar-thumb, #waypoints-list::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+
+    .wpt-folder { margin-bottom: 0.35rem; }
+    .wpt-folder-header { display: flex; align-items: center; gap: 0.45rem; padding: 0.35rem 0.5rem; border-radius: 6px; cursor: pointer; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; user-select: none; }
+    .wpt-folder-header:hover { background: #1e2d40; color: #94a3b8; }
+    .wpt-folder-count { margin-left: auto; opacity: 0.5; font-weight: 400; }
+    .wpt-folder-arrow { font-size: 0.6rem; opacity: 0.6; transition: transform 0.15s; }
+    .wpt-folder-items { padding-left: 0.25rem; }
+    .wpt-item { display: flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.5rem; border-radius: 6px; cursor: pointer; transition: background 0.12s; }
+    .wpt-item:hover { background: #243347; }
+    .wpt-dot { width: 9px; height: 9px; border-radius: 2px; transform: rotate(45deg); flex-shrink: 0; border: 1.5px solid rgba(255,255,255,0.3); }
+    .wpt-name { flex: 1; font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #cbd5e1; }
+
+    .trace-item { border-radius: 8px; padding: 0.7rem 0.75rem; margin-bottom: 0.4rem; cursor: pointer; border: 1px solid transparent; transition: background 0.15s; display: flex; align-items: flex-start; gap: 0.6rem; }
+    .trace-item:hover { background: #243347; }
+    .trace-item.selected { background: #1e3a5f; border-color: #3b82f6; }
+
+    .trace-color-btn { position: relative; flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.3); cursor: pointer; margin-top: 1px; }
+    .trace-color-btn input[type=color] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; border: none; padding: 0; }
+
+    .trace-body { flex: 1; min-width: 0; }
+    .trace-name-wrap { display: flex; align-items: center; gap: 0.4rem; }
+    .trace-name { font-size: 0.85rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; outline: none; border-radius: 3px; }
+    .trace-name[contenteditable=true] { background: #0f172a; padding: 1px 4px; white-space: normal; overflow: visible; border: 1px solid #3b82f6; }
+    .trace-active-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; flex-shrink: 0; }
+    .rename-btn { flex-shrink: 0; background: none; border: none; color: #475569; cursor: pointer; font-size: 0.8rem; padding: 1px 3px; border-radius: 3px; }
+    .rename-btn:hover { color: #94a3b8; background: #334155; }
+    .trace-meta { font-size: 0.72rem; color: #64748b; margin-top: 0.2rem; }
+    .trace-pts { font-size: 0.72rem; color: #475569; margin-top: 0.15rem; }
+
+    /* ── Main content ── */
+    #main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    /* ── Controls ── */
+    #controls { background: #1e293b; padding: 0.5rem 1rem; display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; border-bottom: 1px solid #334155; flex-shrink: 0; }
+    #controls label { font-size: 0.82rem; color: #94a3b8; }
+    #controls select { background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; padding: 0.28rem 0.55rem; font-size: 0.82rem; }
+    #controls select:disabled { opacity: 0.4; }
+    .sep { width: 1px; height: 18px; background: #334155; flex-shrink: 0; }
+    .btn { padding: 0.3rem 0.75rem; border-radius: 6px; border: none; font-size: 0.78rem; cursor: pointer; font-weight: 500; white-space: nowrap; }
+    .btn-primary { background: #3b82f6; color: white; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-ghost { background: #334155; color: #e2e8f0; }
+    .btn-ghost:hover { background: #475569; }
+    .btn-success { background: #22c55e; color: white; }
+    .btn-success:hover { background: #16a34a; }
+    .btn-warning { background: #f59e0b; color: white; }
+    .btn-warning:hover { background: #d97706; }
+    .btn-danger { background: #ef4444; color: white; }
+    .btn-danger:hover { background: #dc2626; }
+
+    /* ── Map area ── */
+    #map-wrap { flex: 1; position: relative; }
+    #map { width: 100%; height: 100%; }
+
+    .leaflet-popup-content-wrapper { background: #1e293b; border: 1px solid #334155; border-radius: 10px; color: #e2e8f0; }
+    .leaflet-popup-tip { background: #1e293b; }
+    .popup-title { font-weight: 600; margin-bottom: 0.4rem; }
+    .popup-row { font-size: 0.85rem; color: #94a3b8; margin: 2px 0; }
+    .popup-row span { color: #e2e8f0; }
+
+    #info-panel { position: absolute; bottom: 20px; right: 10px; z-index: 1000; background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1rem; min-width: 195px; font-size: 0.82rem; }
+    #info-panel h3 { font-size: 0.8rem; margin-bottom: 0.65rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+    .info-row { display: flex; justify-content: space-between; gap: 0.75rem; margin: 0.25rem 0; }
+    .info-label { color: #94a3b8; }
+    .info-val { color: #e2e8f0; font-weight: 500; }
+    .battery-bar { height: 5px; background: #334155; border-radius: 3px; margin-top: 0.4rem; }
+    .battery-fill { height: 100%; border-radius: 3px; background: #22c55e; transition: width 0.3s; }
+
+    #legend { position: absolute; bottom: 20px; left: 10px; z-index: 1000; background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 0.65rem; font-size: 0.78rem; }
+    .legend-item { display: flex; align-items: center; gap: 0.45rem; margin: 0.2rem 0; }
+    .legend-dot { width: 11px; height: 11px; border-radius: 50%; border: 2px solid white; flex-shrink: 0; }
+
+    /* ── Modals ── */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 9000; }
+    .modal-box { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 2rem; width: 440px; max-width: 90vw; }
+    .modal-box h3 { margin-bottom: 1rem; font-size: 1.1rem; }
+    .modal-box input[type=text], .modal-box input[type=file] { width: 100%; padding: 0.6rem 0.75rem; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0; font-size: 0.9rem; outline: none; margin-bottom: 0.75rem; }
+    .modal-box input[type=text]:focus { border-color: #3b82f6; }
+    .modal-box input[type=date] { width: 100%; padding: 0.6rem 0.75rem; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0; font-size: 0.9rem; outline: none; margin-bottom: 0.75rem; }
+    .modal-box input[type=date]:focus { border-color: #3b82f6; }
+    .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.25rem; }
+    .gpx-preview { background: #0f172a; border-radius: 8px; padding: 0.75rem; margin: 0.5rem 0; font-size: 0.8rem; color: #64748b; min-height: 48px; }
+    .gpx-preview strong { color: #e2e8f0; }
+
+    /* ── Sidebar toggle btn in header ── */
+    .icon-btn { background: #334155; border: none; color: #94a3b8; border-radius: 6px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.9rem; flex-shrink: 0; }
+    .icon-btn:hover { background: #475569; color: #e2e8f0; }
+
+    /* ── Controls groups ── */
+    .ctrl-group { display: flex; align-items: center; gap: 0.5rem; }
+    .auto-label { font-size: 0.78rem; color: #94a3b8; display: flex; align-items: center; gap: 0.4rem; cursor: pointer; }
+    .btn-icon { padding: 0.3rem 0.55rem; }
+
+    /* ── Filter bar ── */
+    #filter-bar { background: #131e2e; padding: 0.3rem 1rem; display: flex; gap: 0.45rem; align-items: center; flex-wrap: wrap; border-bottom: 1px solid #1e2d40; flex-shrink: 0; min-height: 34px; }
+    .filter-label { font-size: 0.72rem; color: #475569; white-space: nowrap; }
+    .filter-sep { width: 1px; height: 14px; background: #334155; flex-shrink: 0; margin: 0 0.2rem; }
+    .filter-chip { padding: 0.15rem 0.55rem; border-radius: 20px; font-size: 0.73rem; cursor: pointer; border: 1px solid #1e2d40; color: #475569; background: transparent; transition: all 0.15s; display: inline-flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
+    .filter-chip.active { color: #e2e8f0; background: #1a3155; border-color: #3b82f6; }
+    .filter-chip:hover { border-color: #3b82f6; color: #94a3b8; }
+    .chip-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    #node-filter-group { display: flex; align-items: center; gap: 0.45rem; }
+    #node-chips { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    #gpx-overlay-badge { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; background: #3b1d6e; border: 1px solid #7c3aed; border-radius: 6px; padding: 0.15rem 0.6rem; font-size: 0.73rem; color: #c4b5fd; }
+    #gpx-overlay-badge button { background: none; border: none; color: #a78bfa; cursor: pointer; padding: 0; font-size: 0.8rem; line-height: 1; }
+    #gpx-overlay-badge button:hover { color: #ede9fe; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<!-- Login -->
+<div id="login-screen">
+  <div class="login-card">
+    <h1>Admin — TraceMap</h1>
+    <p>Accès administrateur</p>
+    <input type="password" id="password-input" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')login()"/>
+    <button onclick="login()">Accéder</button>
+    <div class="login-error" id="login-error">Mot de passe incorrect</div>
+  </div>
+</div>
+
+<!-- Modal nouveau tracé -->
+<div id="trace-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <h3>Nouveau tracé</h3>
+    <input type="text" id="trace-name-input" placeholder="Ex: Rando lac 05/05"/>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeTraceModal()">Annuler</button>
+      <button class="btn btn-success" onclick="confirmNewTrace()">Créer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal import GPX -->
+<div id="gpx-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <h3>Import GPX — OsmAnd</h3>
+    <input type="file" id="gpx-file" accept=".gpx"/>
+    <div class="gpx-preview" id="gpx-preview">Sélectionnez un fichier .gpx</div>
+    <p style="font-size:0.8rem; color:#94a3b8;">Ajouté au tracé actif : <strong id="gpx-active-trace" style="color:#e2e8f0;">—</strong></p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeGPXModal()">Annuler</button>
+      <button class="btn btn-primary" id="gpx-import-btn" onclick="confirmGPXImport()" disabled>Importer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal détails tracé -->
+<div id="details-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <h3>Détails du tracé</h3>
+    <label>Nom</label>
+    <input type="text" id="detail-name" placeholder="Nom du tracé"/>
+    <label style="margin-top:0.75rem;">Description</label>
+    <textarea id="detail-desc" placeholder="Notes, observations..." style="width:100%; padding:0.6rem 0.75rem; background:#0f172a; border:1px solid #334155; border-radius:8px; color:#e2e8f0; font-size:0.9rem; font-family:inherit; outline:none; resize:vertical; min-height:80px; margin-bottom:0.75rem;"></textarea>
+    <label style="margin-top:0.75rem;">Date de début</label>
+    <input type="date" id="detail-start-date"/>
+    <label style="margin-top:0.75rem;">Date de fin</label>
+    <input type="date" id="detail-end-date"/>
+    <div style="display:flex; gap:0.75rem; align-items:center;">
+      <input type="color" id="detail-color" style="width:50px; height:40px; border:none; border-radius:8px; cursor:pointer;"/>
+      <span id="detail-color-val" style="font-size:0.85rem; color:#94a3b8;"></span>
+    </div>
+    <div style="margin-top:1rem; padding:0.75rem; background:#0f172a; border-radius:8px; font-size:0.8rem; color:#64748b;">
+      <div>📊 <span id="detail-pts">0</span> points</div>
+      <div>📏 Distance: <span id="detail-distance" style="color:#e2e8f0;">—</span></div>
+      <div>📈 Montée: <span id="detail-elev-gain" style="color:#e2e8f0;">—</span></div>
+      <div>📉 Descente: <span id="detail-elev-loss" style="color:#e2e8f0;">—</span></div>
+      <div>🏔️ Altitude: <span id="detail-alt-range" style="color:#e2e8f0;">—</span></div>
+      <div style="margin-top:0.5rem; padding-top:0.5rem; border-top:1px solid #334155;">
+        <div>📅 Créé: <span id="detail-start" style="color:#e2e8f0;">—</span></div>
+        <div>🏁 <span id="detail-status" style="color:#e2e8f0;">actif</span><span id="detail-end-info"></span></div>
+      </div>
+    </div>
+    <div class="modal-actions" style="margin-top:1.25rem; justify-content:space-between;">
+      <button class="btn btn-danger" onclick="openDeleteModal(window.detailTraceId)">Supprimer</button>
+      <div style="display:flex; gap:0.75rem;">
+        <button class="btn btn-ghost" onclick="closeDetailsModal()">Fermer</button>
+        <button class="btn btn-primary" onclick="saveTraceDetails()">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal suppression -->
+<div id="delete-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <h3>Supprimer le tracé</h3>
+    <p style="color:#94a3b8; font-size:0.9rem; margin-bottom:0.5rem;">
+      Vous allez supprimer <strong id="delete-trace-name" style="color:#f87171;"></strong>
+      ainsi que tous ses points GPS. Cette action est irréversible.
+    </p>
+    <p style="color:#94a3b8; font-size:0.85rem; margin-bottom:0.75rem;">Entrez le mot de passe pour confirmer :</p>
+    <input type="password" id="delete-password" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')confirmDelete()"/>
+    <p id="delete-error" style="color:#f87171; font-size:0.82rem; display:none; margin-top:-0.25rem;">Mot de passe incorrect</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeDeleteModal()">Annuler</button>
+      <button class="btn btn-danger" onclick="confirmDelete()">Supprimer définitivement</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal QR -->
+<div id="qr-modal" class="modal-overlay hidden">
+  <div class="modal-box" style="text-align:center">
+    <h3>Connecter un téléphone</h3>
+    <p style="color:#94a3b8; font-size:0.85rem; margin-bottom:1.25rem;">Scannez ce QR code pour configurer l'app GPS.</p>
+    <div id="qr-container" style="display:inline-block; background:white; padding:12px; border-radius:8px; line-height:0;"></div>
+    <p style="margin-top:1rem; font-size:0.75rem; color:#64748b;">Valable 24h — ne pas partager</p>
+    <div class="modal-actions" style="justify-content:center">
+      <button class="btn btn-ghost" onclick="document.getElementById('qr-modal').classList.add('hidden')">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal édition waypoint -->
+<div id="wpt-edit-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <h3>Modifier le point GPS</h3>
+    <input type="hidden" id="wpt-edit-id"/>
+    <label>Nom</label>
+    <input type="text" id="wpt-edit-name" placeholder="Nom du point"/>
+    <label style="margin-top:0.75rem; display:block;">Dossier / Catégorie</label>
+    <input type="text" id="wpt-edit-category" placeholder="Ex: Bivouacs, Restaurants…" style="margin-top:0.4rem;"/>
+    <div class="modal-actions" style="justify-content:space-between;">
+      <button class="btn btn-danger" onclick="deleteWaypointFromModal()">Supprimer</button>
+      <div style="display:flex;gap:0.75rem;">
+        <button class="btn btn-ghost" onclick="closeWaypointEditModal()">Annuler</button>
+        <button class="btn btn-primary" onclick="saveWaypoint()">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal calque GPX (overlay temporaire) -->
+<div id="gpx-overlay-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <h3>Calque GPX — Affichage temporaire</h3>
+    <p style="font-size:0.82rem; color:#94a3b8; margin-bottom:1rem;">Affiché sur la carte uniquement, non enregistré en base. Supporte les <strong style="color:#e2e8f0">traces</strong> et les <strong style="color:#e2e8f0">points d'intérêt</strong> (waypoints OsmAnd).</p>
+    <input type="file" id="gpx-overlay-file" accept=".gpx"/>
+    <div class="gpx-preview" id="gpx-overlay-preview">Sélectionnez un fichier .gpx</div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeGPXOverlayModal()">Annuler</button>
+      <button class="btn btn-primary" id="gpx-overlay-load-btn" onclick="loadGPXOverlay()" disabled>Afficher sur la carte</button>
+    </div>
+  </div>
+</div>
+
+<div id="settings-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <h3>Paramètres</h3>
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:0.75rem 0; border-bottom:1px solid #334155;">
+      <div>
+        <div style="font-size:0.9rem; color:#e2e8f0;">Création automatique journalière</div>
+        <div style="font-size:0.78rem; color:#64748b; margin-top:0.2rem;">Crée un nouveau tracé chaque jour à minuit</div>
+      </div>
+      <label style="position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0;">
+        <input type="checkbox" id="setting-auto-rollover" onchange="saveSettings()" style="opacity:0; width:0; height:0;">
+        <span id="toggle-slider" style="position:absolute; cursor:pointer; inset:0; background:#334155; border-radius:24px; transition:.2s;">
+          <span id="toggle-knob" style="position:absolute; height:18px; width:18px; left:3px; bottom:3px; background:#94a3b8; border-radius:50%; transition:.2s;"></span>
+        </span>
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeSettingsModal()">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Header -->
+<div id="header" class="hidden">
+  <button class="icon-btn" onclick="toggleSidebar()" title="Volet tracés">☰</button>
+  <h1>TraceMap</h1>
+  <span class="admin-badge">ADMIN</span>
+  <div class="badge online"><span id="status-text">Connexion...</span></div>
+  <div class="badge">Pos: <span id="last-time">—</span></div>
+  <div class="badge">Points: <span id="points-count">0</span></div>
+</div>
+
+<!-- App body: sidebar + content -->
+<div id="app-body" class="hidden">
+
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <div id="sidebar-top-row">
+        <span id="sidebar-title">Tracés</span>
+        <button class="icon-btn" onclick="toggleSidebar()" title="Réduire">←</button>
+      </div>
+      <div id="sidebar-tabs">
+        <button class="sidebar-tab active" id="tab-traces" onclick="switchSidebarTab('traces')">Tracés</button>
+        <button class="sidebar-tab" id="tab-waypoints" onclick="switchSidebarTab('waypoints')">Points GPS</button>
+      </div>
+    </div>
+    <div id="traces-list">
+      <div style="padding:1rem; font-size:0.8rem; color:#475569;">Chargement...</div>
+    </div>
+    <div id="waypoints-list" class="hidden">
+      <div style="padding:1rem; font-size:0.8rem; color:#475569;">Chargement...</div>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div id="main-content">
+
+    <!-- Controls -->
+    <div id="controls">
+      <!-- Zone 1 : gestion des tracés -->
+      <div class="ctrl-group">
+        <label>Tracé :</label>
+        <select id="trace-select" onchange="onTraceChange()">
+          <option value="">Toutes les sources</option>
+        </select>
+      </div>
+      <div class="sep"></div>
+      <!-- Zone 2 : période + refresh -->
+      <div class="ctrl-group">
+        <label>Période :</label>
+        <select id="hours-select" onchange="loadPositions()">
+          <option value="6">6h</option>
+          <option value="24" selected>24h</option>
+          <option value="48">2j</option>
+          <option value="168">7j</option>
+          <option value="720">30j</option>
+        </select>
+        <button class="btn btn-primary btn-icon" onclick="loadPositions()" title="Actualiser">↺</button>
+        <label class="auto-label">
+          <input type="checkbox" id="auto-refresh" checked onchange="toggleAutoRefresh()"/> Auto
+        </label>
+      </div>
+      <div class="sep"></div>
+      <!-- Zone 3 : outils (droite) -->
+      <div class="ctrl-group" style="margin-left:auto;">
+        <button class="btn btn-ghost" onclick="centerMap()">⊕ Centrer</button>
+        <button class="btn btn-ghost" id="trail-btn" onclick="toggleTrail()">Trajet</button>
+        <button class="btn btn-ghost" onclick="openGPXModal()" title="Importer un GPX dans la base">↑ Import</button>
+        <button class="btn btn-ghost" onclick="openGPXOverlayModal()" title="Afficher un GPX en superposition temporaire">Import temporaire</button>
+        <button class="btn btn-ghost" onclick="openPhoneQR()">QR</button>
+        <button class="btn btn-ghost btn-icon" onclick="openSettingsModal()" title="Paramètres">⚙️</button>
+      </div>
+    </div>
+
+    <!-- Filter bar -->
+    <div id="filter-bar">
+      <span class="filter-label">Sources :</span>
+      <button class="filter-chip active" id="chip-src-meshtastic_mqtt" onclick="toggleSourceFilter('meshtastic_mqtt')">
+        <span class="chip-dot" style="background:#3b82f6"></span>Meshtastic
+      </button>
+      <button class="filter-chip active" id="chip-src-phone_gps" onclick="toggleSourceFilter('phone_gps')">
+        <span class="chip-dot" style="background:#22c55e"></span>Téléphone
+      </button>
+      <button class="filter-chip active" id="chip-src-gpx_import" onclick="toggleSourceFilter('gpx_import')">
+        <span class="chip-dot" style="background:#f97316"></span>GPX tracé
+      </button>
+      <button class="filter-chip active" id="chip-src-gpx_waypoint" onclick="toggleSourceFilter('gpx_waypoint')">
+        <span class="chip-dot" style="background:#a855f7;border-radius:2px;transform:rotate(45deg)"></span>POI / Waypoints
+      </button>
+      <div id="node-filter-group" class="hidden">
+        <div class="filter-sep"></div>
+        <span class="filter-label">Appareils :</span>
+        <div id="node-chips"></div>
+      </div>
+      <div id="category-filter-group" class="hidden">
+        <div class="filter-sep"></div>
+        <span class="filter-label">Dossiers POI :</span>
+        <div id="category-chips"></div>
+      </div>
+      <div id="gpx-overlay-badge" class="hidden">
+        <span>📍</span>
+        <span id="gpx-overlay-label"></span>
+        <button onclick="clearGPXOverlay()" title="Retirer le calque">✕</button>
+      </div>
+    </div>
+
+    <!-- Map -->
+    <div id="map-wrap">
+      <div id="map"></div>
+
+      <div id="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div> LilyGo (LoRa)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#22c55e"></div> Téléphone</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#f97316"></div> OsmAnd GPX</div>
+      </div>
+
+      <div id="info-panel">
+        <h3>Dernière position</h3>
+        <div class="info-row"><span class="info-label">Appareil</span><span class="info-val" id="i-node">—</span></div>
+        <div class="info-row"><span class="info-label">Source</span><span class="info-val" id="i-source">—</span></div>
+        <div class="info-row"><span class="info-label">Lat</span><span class="info-val" id="i-lat">—</span></div>
+        <div class="info-row"><span class="info-label">Lon</span><span class="info-val" id="i-lon">—</span></div>
+        <div class="info-row"><span class="info-label">Altitude</span><span class="info-val" id="i-alt">—</span></div>
+        <div class="info-row"><span class="info-label">Vitesse</span><span class="info-val" id="i-speed">—</span></div>
+        <div class="info-row"><span class="info-label">Heure</span><span class="info-val" id="i-time">—</span></div>
+        <div class="info-row"><span class="info-label">Batterie</span><span class="info-val" id="i-bat">—</span></div>
+        <div class="battery-bar"><div class="battery-fill" id="bat-fill" style="width:0%"></div></div>
+      </div>
+    </div>
+
+  </div><!-- /main-content -->
+</div><!-- /app-body -->
+
+<script>
+  const SECRET_PATH = window.location.pathname.replace(/\/admin$/, '').replace(/\/$/, '');
+  let sessionToken = localStorage.getItem('mesh_session');
+  let map, polyline, markers = [], positions = [], traces = [], gpxPoints = { tracks: [], waypoints: [] };
+  let showTrail = true, autoRefreshTimer = null;
+  let gpxOverlayData = null, gpxOverlayLayerGroup = null;
+  let sidebarTab = 'traces';
+  let activeSourceFilters = new Set(['meshtastic_mqtt', 'phone_gps', 'gpx_import', 'gpx_waypoint']);
+  let activeNodeFilters = new Set();
+  let activeCategoryFilters = new Set();
+
+  const SOURCE_COLORS = { meshtastic_mqtt: '#3b82f6', phone_gps: '#22c55e', gpx_import: '#f97316', gpx_waypoint: '#a855f7' };
+  const SOURCE_LABELS = { meshtastic_mqtt: 'LilyGo (LoRa)', phone_gps: 'Téléphone', gpx_import: 'GPX tracé', gpx_waypoint: 'POI / Waypoints' };
+  const CATEGORY_COLORS = ['#a855f7', '#ec4899', '#06b6d4', '#84cc16', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6'];
+
+  // ── Auth ────────────────────────────────────────────────────
+  async function login() {
+    const pw = document.getElementById('password-input').value;
+    const res = await fetch(`${SECRET_PATH}/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw }) });
+    const data = await res.json();
+    if (data.success) { sessionToken = data.token; localStorage.setItem('mesh_session', sessionToken); showApp(); }
+    else document.getElementById('login-error').style.display = 'block';
+  }
+
+  function showApp() {
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('header').classList.remove('hidden');
+    document.getElementById('app-body').classList.remove('hidden');
+    initMap(); loadTraces(); loadPositions(); startAutoRefresh();
+  }
+
+  async function checkSession() {
+    if (!sessionToken) return;
+    try { const res = await fetch(`${SECRET_PATH}/api/last?token=${sessionToken}`); if (res.ok) showApp(); } catch {}
+  }
+
+  // ── Sidebar ──────────────────────────────────────────────────
+  function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('collapsed');
+    setTimeout(() => map && map.invalidateSize(), 220);
+  }
+
+  function renderSidebar() {
+    const list = document.getElementById('traces-list');
+    if (!traces.length) { list.innerHTML = '<div style="padding:1rem; font-size:0.8rem; color:#475569;">Aucun tracé</div>'; return; }
+    const selectedId = document.getElementById('trace-select').value;
+    list.innerHTML = traces.map(t => {
+      const date = new Date(t.start_time * 1000).toLocaleDateString('fr-CH');
+      const endDate = t.end_time ? new Date(t.end_time * 1000).toLocaleDateString('fr-CH') : null;
+      const color = t.color || '#3b82f6';
+      const isSelected = String(t.id) === String(selectedId);
+      const pts = t.point_count || 0;
+      return `
+        <div class="trace-item${isSelected ? ' selected' : ''}" onclick="selectTrace(${t.id})">
+          <div class="trace-color-btn" style="background:${color}" title="Changer la couleur">
+            <input type="color" value="${color}" onclick="event.stopPropagation()"
+              onchange="updateTraceColor(${t.id}, this.value)">
+          </div>
+          <div class="trace-body">
+            <div class="trace-name-wrap">
+              <div class="trace-name" id="tname-${t.id}">${escHtml(t.name)}</div>
+              ${!t.end_time ? '<div class="trace-active-dot" title="Tracé actif"></div>' : ''}
+              <button class="rename-btn" onclick="event.stopPropagation(); openDetailsModal(${t.id})" title="Détails / Renommer">✏️</button>
+              <button class="rename-btn" onclick="event.stopPropagation(); openDeleteModal(${t.id})" title="Supprimer" style="color:#ef4444;">🗑️</button>
+            </div>
+            <div class="trace-meta">${date}${endDate && endDate !== date ? ' → ' + endDate : ''}</div>
+            <div class="trace-pts">${pts} point${pts>1?'s':''}</div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  // ── Onglets sidebar ──────────────────────────────────────────
+  function switchSidebarTab(tab) {
+    sidebarTab = tab;
+    document.getElementById('tab-traces').classList.toggle('active', tab === 'traces');
+    document.getElementById('tab-waypoints').classList.toggle('active', tab === 'waypoints');
+    document.getElementById('traces-list').classList.toggle('hidden', tab !== 'traces');
+    document.getElementById('waypoints-list').classList.toggle('hidden', tab !== 'waypoints');
+    if (tab === 'waypoints') renderWaypointsSidebar();
+  }
+
+  // ── Sidebar waypoints ────────────────────────────────────────
+  const collapsedFolders = new Set();
+
+  function renderWaypointsSidebar() {
+    const list = document.getElementById('waypoints-list');
+    const wpts = positions.filter(p => p.source === 'gpx_waypoint');
+    if (!wpts.length) {
+      list.innerHTML = '<div style="padding:1rem; font-size:0.8rem; color:#475569;">Aucun point GPS importé.<br><br>Utilisez <strong style="color:#e2e8f0">↑ Import</strong> pour importer un fichier GPX.</div>';
+      return;
+    }
+    const catColorMap = buildCategoryColorMap();
+    const groups = new Map();
+    wpts.forEach(w => { if (!groups.has(w.node_id)) groups.set(w.node_id, []); groups.get(w.node_id).push(w); });
+    list.innerHTML = [...groups.entries()].map(([cat, items]) => {
+      const color = catColorMap.get(cat) || '#a855f7';
+      const fid = cat.replace(/[^a-z0-9]/gi, '_');
+      const collapsed = collapsedFolders.has(cat);
+      return `<div class="wpt-folder">
+        <div class="wpt-folder-header" onclick="toggleWptFolder('${escHtml(cat)}','${fid}')">
+          <span class="wpt-dot" style="background:${color}"></span>
+          ${escHtml(cat)}
+          <span class="wpt-folder-count">${items.length}</span>
+          <span class="wpt-folder-arrow" id="wfa-${fid}" style="transform:rotate(${collapsed?'-90':'0'}deg)">▼</span>
+        </div>
+        <div class="wpt-folder-items${collapsed?' hidden':''}" id="wfi-${fid}">
+          ${items.map(w => `
+            <div class="wpt-item" onclick="centerOnWaypoint(${w.latitude},${w.longitude})">
+              <span class="wpt-dot" style="background:${color}"></span>
+              <span class="wpt-name">${escHtml(w.node_name || w.node_id)}</span>
+              <button class="rename-btn" onclick="event.stopPropagation();openWaypointEditModal(${w.id},'${escHtml(w.node_name||'')}','${escHtml(w.node_id||'')}')">✏️</button>
+              <button class="rename-btn" style="color:#ef4444" onclick="event.stopPropagation();deleteWaypoint(${w.id})">🗑️</button>
+            </div>`).join('')}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function toggleWptFolder(cat, fid) {
+    const items = document.getElementById(`wfi-${fid}`);
+    const arrow = document.getElementById(`wfa-${fid}`);
+    if (!items) return;
+    const isCollapsed = items.classList.contains('hidden');
+    items.classList.toggle('hidden', !isCollapsed);
+    if (arrow) arrow.style.transform = isCollapsed ? 'rotate(0deg)' : 'rotate(-90deg)';
+    if (isCollapsed) collapsedFolders.delete(cat); else collapsedFolders.add(cat);
+  }
+
+  function centerOnWaypoint(lat, lon) {
+    map.setView([lat, lon], 15);
+    markers.forEach(m => {
+      const p = m.getLatLng();
+      if (Math.abs(p.lat - lat) < 0.000015 && Math.abs(p.lng - lon) < 0.000015) m.openPopup();
+    });
+  }
+
+  // ── Édition waypoint ─────────────────────────────────────────
+  function openWaypointEditModal(id, name, category) {
+    document.getElementById('wpt-edit-id').value = id;
+    document.getElementById('wpt-edit-name').value = name;
+    document.getElementById('wpt-edit-category').value = category;
+    document.getElementById('wpt-edit-modal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('wpt-edit-name').select(), 50);
+  }
+  function closeWaypointEditModal() { document.getElementById('wpt-edit-modal').classList.add('hidden'); }
+
+  async function saveWaypoint() {
+    const id = document.getElementById('wpt-edit-id').value;
+    const name = document.getElementById('wpt-edit-name').value.trim();
+    const category = document.getElementById('wpt-edit-category').value.trim();
+    if (!name) return;
+    await fetch(`${SECRET_PATH}/api/positions/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-session-token': sessionToken },
+      body: JSON.stringify({ node_name: name, node_id: category || 'Waypoints' })
+    });
+    closeWaypointEditModal();
+    await loadPositions();
+    renderWaypointsSidebar();
+  }
+
+  async function deleteWaypoint(id) {
+    if (!confirm('Supprimer ce point GPS ?')) return;
+    await fetch(`${SECRET_PATH}/api/positions/${id}`, { method: 'DELETE', headers: { 'x-session-token': sessionToken } });
+    await loadPositions();
+    renderWaypointsSidebar();
+  }
+
+  function deleteWaypointFromModal() {
+    const id = document.getElementById('wpt-edit-id').value;
+    closeWaypointEditModal();
+    deleteWaypoint(id);
+  }
+
+  function selectTrace(id) {
+    document.getElementById('trace-select').value = id;
+    document.getElementById('hours-select').disabled = true;
+    loadPositions();
+    renderSidebar();
+  }
+
+  function startRename(traceId) {
+    const el = document.getElementById(`tname-${traceId}`);
+    if (!el) return;
+    const original = el.textContent;
+    el.contentEditable = 'true';
+    el.focus();
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    window.getSelection().removeAllRanges();
+    window.getSelection().addRange(range);
+
+    const save = async () => {
+      el.contentEditable = 'false';
+      const newName = el.textContent.trim();
+      if (!newName || newName === original) { el.textContent = original; return; }
+      await fetch(`${SECRET_PATH}/api/traces/${traceId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'x-session-token': sessionToken },
+        body: JSON.stringify({ name: newName })
+      });
+      await loadTraces();
+    };
+    el.addEventListener('blur', save, { once: true });
+    el.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
+      if (e.key === 'Escape') { el.textContent = original; el.contentEditable = 'false'; }
+    });
+  }
+
+  async function updateTraceColor(traceId, color) {
+    await fetch(`${SECRET_PATH}/api/traces/${traceId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-session-token': sessionToken },
+      body: JSON.stringify({ color })
+    });
+    await loadTraces();
+    // Redessiner si ce tracé est actif
+    if (String(document.getElementById('trace-select').value) === String(traceId)) updateMap();
+  }
+
+  // ── Carte ────────────────────────────────────────────────────
+  function initMap() {
+    map = L.map('map').setView([46.73, 6.52], 10);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors', maxZoom: 19 }).addTo(map);
+  }
+
+  function getMarkerIcon(source, isLast, traceColor) {
+    const color = traceColor || SOURCE_COLORS[source] || '#94a3b8';
+    const size = isLast ? 18 : 12, border = isLast ? 3 : 2;
+    return L.divIcon({ html: `<div style="background:${color};width:${size}px;height:${size}px;border-radius:50%;border:${border}px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4)"></div>`, iconSize: [size, size], iconAnchor: [size/2, size/2] });
+  }
+
+  function getSelectedTraceColor() {
+    const id = document.getElementById('trace-select').value;
+    if (!id) return null;
+    return traces.find(t => String(t.id) === String(id))?.color || null;
+  }
+
+  // ── Tracés ───────────────────────────────────────────────────
+  async function loadTraces() {
+    try {
+      const res = await fetch(`${SECRET_PATH}/api/traces`, { headers: { 'x-session-token': sessionToken } });
+      if (!res.ok) return;
+      traces = await res.json();
+      const sel = document.getElementById('trace-select');
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">Toutes les sources</option>';
+      traces.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        const date = new Date(t.start_time * 1000).toLocaleDateString('fr-CH');
+        opt.textContent = `${t.name}${t.end_time ? '' : ' ●'} (${date})`;
+        sel.appendChild(opt);
+      });
+      if (cur) sel.value = cur;
+      renderSidebar();
+      const active = traces.find(t => !t.end_time);
+      document.getElementById('gpx-active-trace').textContent = active ? active.name : 'Aucun';
+    } catch {}
+  }
+
+  function onTraceChange() {
+    document.getElementById('hours-select').disabled = !!document.getElementById('trace-select').value;
+    loadPositions();
+    renderSidebar();
+  }
+
+  function openTraceModal() {
+    const today = new Date().toLocaleDateString('fr-CH');
+    document.getElementById('trace-name-input').value = `Tracé ${today}`;
+    document.getElementById('trace-modal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('trace-name-input').select(), 50);
+  }
+  function closeTraceModal() { document.getElementById('trace-modal').classList.add('hidden'); }
+
+  async function confirmNewTrace() {
+    const name = document.getElementById('trace-name-input').value.trim();
+    if (!name) return;
+    const res = await fetch(`${SECRET_PATH}/api/traces`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-session-token': sessionToken },
+      body: JSON.stringify({ name })
+    });
+    if (res.ok) {
+      const trace = await res.json();
+      closeTraceModal();
+      await loadTraces();
+      selectTrace(trace.id);
+    }
+  }
+
+  async function endCurrentTrace() {
+    const active = traces.find(t => !t.end_time);
+    if (!active) { alert('Aucun tracé actif.'); return; }
+    if (!confirm(`Terminer le tracé "${active.name}" ?`)) return;
+    const res = await fetch(`${SECRET_PATH}/api/traces/${active.id}/end`, { method: 'PUT', headers: { 'x-session-token': sessionToken } });
+    if (res.ok) { await loadTraces(); loadPositions(); }
+  }
+
+  // ── Import GPX ───────────────────────────────────────────────
+  function openGPXModal() {
+    gpxPoints = { tracks: [], waypoints: [] };
+    document.getElementById('gpx-file').value = '';
+    document.getElementById('gpx-preview').textContent = 'Sélectionnez un fichier .gpx';
+    document.getElementById('gpx-import-btn').disabled = true;
+    document.getElementById('gpx-modal').classList.remove('hidden');
+  }
+  function closeGPXModal() { document.getElementById('gpx-modal').classList.add('hidden'); gpxPoints = { tracks: [], waypoints: [] }; }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('gpx-file').addEventListener('change', e => {
+      const file = e.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        try {
+          gpxPoints = parseGPX(ev.target.result);
+          const preview = document.getElementById('gpx-preview');
+          const total = gpxPoints.tracks.length + gpxPoints.waypoints.length;
+          if (!total) { preview.innerHTML = '<span style="color:#f87171">Aucun point trouvé.</span>'; document.getElementById('gpx-import-btn').disabled = true; }
+          else {
+            const cats = [...new Set(gpxPoints.waypoints.map(p => p.device_id))];
+            const catStr = cats.length ? `<br>Dossiers : ${cats.map(c => `<strong>${c}</strong> (${gpxPoints.waypoints.filter(p=>p.device_id===c).length})`).join(', ')}` : '';
+            preview.innerHTML = `${gpxPoints.tracks.length ? `<strong>${gpxPoints.tracks.length} pts de tracé</strong>` : ''}${gpxPoints.tracks.length && gpxPoints.waypoints.length ? ' &nbsp;·&nbsp; ' : ''}${gpxPoints.waypoints.length ? `<strong>${gpxPoints.waypoints.length} waypoints</strong>` : ''}${catStr}`;
+            document.getElementById('gpx-import-btn').disabled = false;
+          }
+        } catch { document.getElementById('gpx-preview').innerHTML = '<span style="color:#f87171">Erreur de lecture GPX.</span>'; }
+      };
+      reader.readAsText(file);
+    });
+    document.getElementById('detail-color').addEventListener('input', e => {
+      document.getElementById('detail-color-val').textContent = e.target.value;
+    });
+
+    document.getElementById('gpx-overlay-file').addEventListener('change', e => {
+      const file = e.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        try {
+          gpxOverlayData = parseGPXOverlay(ev.target.result);
+          const trkCount = gpxOverlayData.tracks.reduce((s,t) => s + t.points.length, 0);
+          const wptCount = gpxOverlayData.waypoints.length;
+          const trkNames = gpxOverlayData.tracks.length;
+          const preview = document.getElementById('gpx-overlay-preview');
+          if (!trkCount && !wptCount) {
+            preview.innerHTML = '<span style="color:#f87171">Aucun point trouvé.</span>';
+            document.getElementById('gpx-overlay-load-btn').disabled = true;
+          } else {
+            preview.innerHTML = `<strong>${trkNames} tracé${trkNames>1?'s':''}</strong> (${trkCount} pts) &nbsp;·&nbsp; <strong>${wptCount} POI</strong>`;
+            document.getElementById('gpx-overlay-load-btn').disabled = false;
+          }
+        } catch { document.getElementById('gpx-overlay-preview').innerHTML = '<span style="color:#f87171">Erreur de lecture GPX.</span>'; }
+      };
+      reader.readAsText(file);
+    });
+  });
+
+  function parseGPX(xml) {
+    const doc = new DOMParser().parseFromString(xml, 'application/xml');
+    const tracks = [], waypoints = [];
+    const parseTime = (pt) => {
+      const time = pt.querySelector('time');
+      if (time) { const t = new Date(time.textContent.trim()); if (!isNaN(t)) return Math.floor(t/1000); }
+      return Math.floor(Date.now()/1000);
+    };
+    doc.querySelectorAll('trkpt').forEach(pt => {
+      const lat = parseFloat(pt.getAttribute('lat')), lon = parseFloat(pt.getAttribute('lon'));
+      if (isNaN(lat)||isNaN(lon)) return;
+      const ele = pt.querySelector('ele');
+      tracks.push({ latitude: lat, longitude: lon, altitude: ele ? parseFloat(ele.textContent) : null, timestamp: parseTime(pt), device_id: 'gpx_track', device_name: 'GPX Track' });
+    });
+    doc.querySelectorAll('wpt').forEach(pt => {
+      const lat = parseFloat(pt.getAttribute('lat')), lon = parseFloat(pt.getAttribute('lon'));
+      if (isNaN(lat)||isNaN(lon)) return;
+      const ele = pt.querySelector('ele');
+      const name = pt.querySelector('name')?.textContent?.trim() || 'POI';
+      const category = pt.querySelector('type')?.textContent?.trim()
+        || pt.querySelector('extensions > *')?.textContent?.trim()
+        || 'Waypoints';
+      waypoints.push({ latitude: lat, longitude: lon, altitude: ele ? parseFloat(ele.textContent) : null, timestamp: parseTime(pt), device_id: category, device_name: name });
+    });
+    return { tracks, waypoints };
+  }
+
+  async function confirmGPXImport() {
+    const { tracks, waypoints } = gpxPoints;
+    if (!tracks.length && !waypoints.length) return;
+    const active = traces.find(t => !t.end_time);
+    const traceId = active?.id || null;
+    const headers = { 'Content-Type': 'application/json', 'x-session-token': sessionToken };
+    let total = 0, ok = true;
+    if (tracks.length) {
+      const res = await fetch(`${SECRET_PATH}/api/positions/ingest`, { method: 'POST', headers, body: JSON.stringify({ points: tracks, source: 'gpx_import', trace_id: traceId }) });
+      if (res.ok) { const d = await res.json(); total += d.inserted; } else ok = false;
+    }
+    if (waypoints.length) {
+      const res = await fetch(`${SECRET_PATH}/api/positions/ingest`, { method: 'POST', headers, body: JSON.stringify({ points: waypoints, source: 'gpx_waypoint', trace_id: traceId }) });
+      if (res.ok) { const d = await res.json(); total += d.inserted; } else ok = false;
+    }
+    closeGPXModal();
+    await loadPositions();
+    if (ok) alert(`${total} points importés !`);
+    else alert("Erreur partielle lors de l'import.");
+  }
+
+  // ── QR Code ──────────────────────────────────────────────────
+  function openPhoneQR() {
+    const origin = window.location.origin;
+    const phoneUrl = `${origin}/phone-tracker.html?url=${encodeURIComponent(origin+SECRET_PATH)}&token=${encodeURIComponent(sessionToken)}`;
+    document.getElementById('qr-modal').classList.remove('hidden');
+    const container = document.getElementById('qr-container');
+    container.innerHTML = '';
+    new QRCode(container, { text: phoneUrl, width: 240, height: 240, colorDark: '#000000', colorLight: '#ffffff' });
+  }
+
+  // ── Positions ────────────────────────────────────────────────
+  async function loadPositions() {
+    const traceId = document.getElementById('trace-select').value;
+    const hours = document.getElementById('hours-select').value;
+    const url = traceId ? `${SECRET_PATH}/api/positions?trace_id=${traceId}` : `${SECRET_PATH}/api/positions?hours=${hours}`;
+    try {
+      const res = await fetch(url, { headers: { 'x-session-token': sessionToken } });
+      if (res.status === 401) { localStorage.removeItem('mesh_session'); location.reload(); return; }
+      positions = await res.json();
+      activeNodeFilters = new Set();
+      activeCategoryFilters = new Set();
+      renderFilterBar();
+      updateMap();
+      if (sidebarTab === 'waypoints') renderWaypointsSidebar();
+    } catch { document.getElementById('status-text').textContent = 'Erreur réseau'; }
+  }
+
+  function getFilteredPositions() {
+    return positions.filter(p => {
+      const src = p.source || 'meshtastic_mqtt';
+      if (!activeSourceFilters.has(src)) return false;
+      if (src === 'gpx_waypoint')
+        return activeCategoryFilters.size === 0 || activeCategoryFilters.has(p.node_id);
+      return activeNodeFilters.size === 0 || activeNodeFilters.has(p.node_id);
+    });
+  }
+
+  function buildCategoryColorMap() {
+    const cats = [...new Set(positions.filter(p => p.source === 'gpx_waypoint').map(p => p.node_id))];
+    const m = new Map();
+    cats.forEach((cat, i) => m.set(cat, CATEGORY_COLORS[i % CATEGORY_COLORS.length]));
+    return m;
+  }
+
+  function buildWaypointPopup(p, color) {
+    return `<div class="popup-title" style="color:${color}">${p.node_name || p.node_id}</div>
+      <div class="popup-row">Dossier: <span>${p.node_id}</span></div>
+      ${p.altitude ? `<div class="popup-row">Altitude: <span>${Math.round(p.altitude)} m</span></div>` : ''}
+      <div class="popup-row">Pos: <span>${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}</span></div>`;
+  }
+
+  function updateMap() {
+    markers.forEach(m => map.removeLayer(m)); markers = [];
+    if (polyline) map.removeLayer(polyline);
+    const filtered = getFilteredPositions();
+    if (!filtered.length) {
+      document.getElementById('status-text').textContent = positions.length ? 'Filtré (0 résultat)' : 'Aucune position';
+      document.getElementById('points-count').textContent = '0';
+      return;
+    }
+    const traceColor = getSelectedTraceColor();
+    const catColorMap = buildCategoryColorMap();
+    const trackPts = filtered.filter(p => p.source !== 'gpx_waypoint');
+    const wayptPts = filtered.filter(p => p.source === 'gpx_waypoint');
+
+    if (showTrail && trackPts.length > 1)
+      polyline = L.polyline(trackPts.map(p => [p.latitude,p.longitude]), { color: traceColor||'#3b82f6', weight: 3, opacity: 0.7 }).addTo(map);
+
+    if (trackPts.length) {
+      trackPts.slice(0,-1).forEach(p => markers.push(L.marker([p.latitude,p.longitude],{icon:getMarkerIcon(p.source,false,traceColor)}).addTo(map).bindPopup(buildPopup(p))));
+      const last = trackPts[trackPts.length-1];
+      markers.push(L.marker([last.latitude,last.longitude],{icon:getMarkerIcon(last.source,true,traceColor)}).addTo(map).bindPopup(buildPopup(last)).openPopup());
+      updateInfoPanel(last);
+    }
+
+    wayptPts.forEach(p => {
+      const color = catColorMap.get(p.node_id) || '#a855f7';
+      const icon = L.divIcon({
+        html: `<div style="background:${color};width:11px;height:11px;border-radius:2px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.5);transform:rotate(45deg)"></div>`,
+        iconSize: [13, 13], iconAnchor: [6, 6]
+      });
+      markers.push(L.marker([p.latitude,p.longitude],{icon}).addTo(map).bindPopup(buildWaypointPopup(p, color)));
+    });
+
+    document.getElementById('status-text').textContent = 'En ligne';
+    document.getElementById('points-count').textContent = filtered.length;
+  }
+
+  function buildPopup(p) {
+    return `<div class="popup-title">${p.node_name||p.node_id}</div>
+      <div class="popup-row">Source: <span>${SOURCE_LABELS[p.source]||'—'}</span></div>
+      <div class="popup-row">Heure: <span>${new Date(p.timestamp*1000).toLocaleString('fr-CH')}</span></div>
+      <div class="popup-row">Position: <span>${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}</span></div>
+      ${p.altitude?`<div class="popup-row">Altitude: <span>${p.altitude}m</span></div>`:''}
+      ${p.speed?`<div class="popup-row">Vitesse: <span>${p.speed} km/h</span></div>`:''}
+      ${p.battery?`<div class="popup-row">Batterie: <span>${p.battery}%</span></div>`:''}`;
+  }
+
+  function updateInfoPanel(p) {
+    const date = new Date(p.timestamp*1000);
+    document.getElementById('i-node').textContent = p.node_name||p.node_id;
+    document.getElementById('i-source').textContent = SOURCE_LABELS[p.source]||'—';
+    document.getElementById('i-lat').textContent = p.latitude.toFixed(5);
+    document.getElementById('i-lon').textContent = p.longitude.toFixed(5);
+    document.getElementById('i-alt').textContent = p.altitude?`${p.altitude}m`:'—';
+    document.getElementById('i-speed').textContent = p.speed?`${p.speed} km/h`:'—';
+    document.getElementById('i-time').textContent = date.toLocaleTimeString('fr-CH');
+    document.getElementById('last-time').textContent = date.toLocaleTimeString('fr-CH');
+    document.getElementById('i-bat').textContent = p.battery?`${p.battery}%`:'—';
+    document.getElementById('bat-fill').style.width=(p.battery||0)+'%';
+    document.getElementById('bat-fill').style.background=p.battery>30?'#22c55e':'#ef4444';
+  }
+
+  function centerMap() { if (!positions.length) return; const l=positions[positions.length-1]; map.setView([l.latitude,l.longitude],14); }
+  function toggleTrail() { showTrail=!showTrail; updateMap(); }
+
+  function startAutoRefresh() {
+    autoRefreshTimer = setInterval(() => { if (document.getElementById('auto-refresh').checked) { loadPositions(); loadTraces(); } }, 30000);
+  }
+  function toggleAutoRefresh() {
+    if (!document.getElementById('auto-refresh').checked) clearInterval(autoRefreshTimer); else startAutoRefresh();
+  }
+
+  // ── Calculs ──────────────────────────────────────────────────
+  function haversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Earth radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  }
+
+  function calculateTraceStats(pts) {
+    if (!pts || pts.length === 0) return { distance: 0, elevationGain: 0, elevationLoss: 0, minAlt: 0, maxAlt: 0 };
+
+    let distance = 0;
+    let elevationGain = 0, elevationLoss = 0;
+    let minAlt = pts[0].altitude || 0, maxAlt = pts[0].altitude || 0;
+
+    for (let i = 1; i < pts.length; i++) {
+      const d = haversineDistance(pts[i-1].latitude, pts[i-1].longitude, pts[i].latitude, pts[i].longitude);
+      distance += d;
+
+      if (pts[i].altitude && pts[i-1].altitude) {
+        const diff = pts[i].altitude - pts[i-1].altitude;
+        if (diff > 0) elevationGain += diff;
+        if (diff < 0) elevationLoss += Math.abs(diff);
+      }
+
+      if (pts[i].altitude) {
+        minAlt = Math.min(minAlt, pts[i].altitude);
+        maxAlt = Math.max(maxAlt, pts[i].altitude);
+      }
+    }
+
+    return { distance: distance * 1000, elevationGain, elevationLoss, minAlt, maxAlt }; // distance in meters
+  }
+  window.detailTraceId = null;
+
+  async function openDetailsModal(traceId) {
+    const trace = traces.find(t => t.id === traceId);
+    if (!trace) return;
+    window.detailTraceId = traceId;
+    document.getElementById('detail-name').value = trace.name;
+    document.getElementById('detail-desc').value = trace.description || '';
+    document.getElementById('detail-color').value = trace.color || '#3b82f6';
+    document.getElementById('detail-color-val').textContent = trace.color || '#3b82f6';
+    document.getElementById('detail-pts').textContent = trace.point_count || 0;
+
+    // Dates
+    const startDate = new Date(trace.start_time * 1000).toISOString().split('T')[0];
+    document.getElementById('detail-start-date').value = startDate;
+    document.getElementById('detail-start').textContent = new Date(trace.start_time * 1000).toLocaleDateString('fr-CH');
+
+    if (trace.end_time) {
+      const endDate = new Date(trace.end_time * 1000).toISOString().split('T')[0];
+      document.getElementById('detail-end-date').value = endDate;
+      const endDateFmt = new Date(trace.end_time * 1000).toLocaleDateString('fr-CH');
+      document.getElementById('detail-status').textContent = 'fermé';
+      document.getElementById('detail-end-info').textContent = ` le ${endDateFmt}`;
+    } else {
+      document.getElementById('detail-end-date').value = '';
+      document.getElementById('detail-status').textContent = 'actif';
+      document.getElementById('detail-end-info').textContent = '';
+    }
+
+    // Load positions and calculate stats
+    try {
+      const res = await fetch(`${SECRET_PATH}/api/positions?trace_id=${traceId}`, { headers: { 'x-session-token': sessionToken } });
+      if (res.ok) {
+        const pts = await res.json();
+        const stats = calculateTraceStats(pts);
+        document.getElementById('detail-distance').textContent = stats.distance >= 1000 ? (stats.distance/1000).toFixed(1) + ' km' : Math.round(stats.distance) + ' m';
+        document.getElementById('detail-elev-gain').textContent = Math.round(stats.elevationGain) + ' m';
+        document.getElementById('detail-elev-loss').textContent = Math.round(stats.elevationLoss) + ' m';
+        document.getElementById('detail-alt-range').textContent = Math.round(stats.minAlt) + ' – ' + Math.round(stats.maxAlt) + ' m';
+      }
+    } catch (e) { console.log('Erreur stats:', e); }
+
+    document.getElementById('details-modal').classList.remove('hidden');
+  }
+
+  function closeDetailsModal() {
+    document.getElementById('details-modal').classList.add('hidden');
+    window.detailTraceId = null;
+  }
+
+  async function saveTraceDetails() {
+    const name = document.getElementById('detail-name').value.trim();
+    const desc = document.getElementById('detail-desc').value.trim();
+    const color = document.getElementById('detail-color').value;
+    if (!name) { alert('Le nom du tracé est requis'); return; }
+
+    const payload = { name, description: desc, color };
+
+    // Add start_time if date is set (using local time, not UTC)
+    const startDateVal = document.getElementById('detail-start-date').value;
+    if (startDateVal) {
+      const startDate = new Date(startDateVal + 'T00:00:00');
+      payload.start_time = Math.floor(startDate.getTime() / 1000);
+    }
+
+    // Add end_time if date is set (using local time, not UTC)
+    const endDateVal = document.getElementById('detail-end-date').value;
+    if (endDateVal) {
+      const endDate = new Date(endDateVal + 'T23:59:59');
+      payload.end_time = Math.floor(endDate.getTime() / 1000);
+    }
+
+    console.log('Saving trace:', payload);
+    const res = await fetch(`${SECRET_PATH}/api/traces/${window.detailTraceId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-session-token': sessionToken },
+      body: JSON.stringify(payload)
+    });
+    console.log('Response status:', res.status);
+    const data = await res.json();
+    console.log('Response data:', data);
+    if (res.ok) {
+      alert('Tracé enregistré avec succès');
+      closeDetailsModal();
+      await loadTraces();
+      loadPositions();
+    } else {
+      alert('Erreur lors de l\'enregistrement: ' + (data.error || 'Erreur inconnue'));
+    }
+  }
+
+  // ── Suppression tracé ────────────────────────────────────────
+  let deleteTargetId = null;
+
+  function openDeleteModal(traceId) {
+    const trace = traces.find(t => t.id === traceId);
+    if (!trace) return;
+    deleteTargetId = traceId;
+    document.getElementById('delete-trace-name').textContent = trace.name;
+    document.getElementById('delete-password').value = '';
+    document.getElementById('delete-error').style.display = 'none';
+    document.getElementById('delete-modal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('delete-password').focus(), 50);
+  }
+
+  function closeDeleteModal() {
+    document.getElementById('delete-modal').classList.add('hidden');
+    deleteTargetId = null;
+  }
+
+  async function confirmDelete() {
+    const password = document.getElementById('delete-password').value;
+    if (!password) return;
+
+    // Vérifier le mot de passe via l'endpoint login
+    const loginRes = await fetch(`${SECRET_PATH}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password })
+    });
+    const loginData = await loginRes.json();
+    if (!loginData.success) {
+      document.getElementById('delete-error').style.display = 'block';
+      document.getElementById('delete-password').value = '';
+      document.getElementById('delete-password').focus();
+      return;
+    }
+
+    const res = await fetch(`${SECRET_PATH}/api/traces/${deleteTargetId}`, {
+      method: 'DELETE',
+      headers: { 'x-session-token': sessionToken }
+    });
+    if (res.ok) {
+      // Réinitialiser la vue si le tracé supprimé était sélectionné
+      if (String(document.getElementById('trace-select').value) === String(deleteTargetId)) {
+        document.getElementById('trace-select').value = '';
+        document.getElementById('hours-select').disabled = false;
+      }
+      closeDeleteModal();
+      await loadTraces();
+      loadPositions();
+    }
+  }
+
+  async function openSettingsModal() {
+    try {
+      const res = await fetch(`${SECRET_PATH}/api/settings`, { headers: { 'x-session-token': sessionToken } });
+      if (res.ok) {
+        const s = await res.json();
+        const checked = s.autoRollover === 'true';
+        document.getElementById('setting-auto-rollover').checked = checked;
+        updateToggleStyle(checked);
+      }
+    } catch(e) {}
+    document.getElementById('settings-modal').classList.remove('hidden');
+  }
+
+  function closeSettingsModal() {
+    document.getElementById('settings-modal').classList.add('hidden');
+  }
+
+  function updateToggleStyle(checked) {
+    const slider = document.getElementById('toggle-slider');
+    const knob = document.getElementById('toggle-knob');
+    slider.style.background = checked ? '#3b82f6' : '#334155';
+    knob.style.background = checked ? '#fff' : '#94a3b8';
+    knob.style.left = checked ? '23px' : '3px';
+  }
+
+  async function saveSettings() {
+    const checked = document.getElementById('setting-auto-rollover').checked;
+    updateToggleStyle(checked);
+    await fetch(`${SECRET_PATH}/api/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-session-token': sessionToken },
+      body: JSON.stringify({ autoRollover: checked }),
+    });
+  }
+
+  // ── Filtres sources & nœuds ──────────────────────────────────
+  function renderFilterBar() {
+    const presentSources = new Set(positions.map(p => p.source || 'meshtastic_mqtt'));
+    ['meshtastic_mqtt', 'phone_gps', 'gpx_import', 'gpx_waypoint'].forEach(src => {
+      const chip = document.getElementById(`chip-src-${src}`);
+      if (chip) {
+        chip.style.display = presentSources.has(src) ? '' : 'none';
+        chip.classList.toggle('active', activeSourceFilters.has(src));
+      }
+    });
+
+    // Appareils GPS (hors waypoints)
+    const nodeMap = new Map();
+    positions.filter(p => p.source !== 'gpx_waypoint')
+      .forEach(p => { if (!nodeMap.has(p.node_id)) nodeMap.set(p.node_id, p.node_name || p.node_id); });
+    const nodeGroup = document.getElementById('node-filter-group');
+    const nodeChipsEl = document.getElementById('node-chips');
+    if (nodeMap.size > 1) {
+      nodeGroup.classList.remove('hidden');
+      nodeChipsEl.innerHTML = '';
+      nodeMap.forEach((name, id) => {
+        const isActive = activeNodeFilters.size === 0 || activeNodeFilters.has(id);
+        const btn = document.createElement('button');
+        btn.className = `filter-chip${isActive ? ' active' : ''}`;
+        btn.textContent = name;
+        btn.onclick = () => toggleNodeFilter(id);
+        nodeChipsEl.appendChild(btn);
+      });
+    } else {
+      nodeGroup.classList.add('hidden');
+    }
+
+    // Dossiers POI (waypoints uniquement)
+    const catColorMap = buildCategoryColorMap();
+    const catMap = new Map();
+    positions.filter(p => p.source === 'gpx_waypoint')
+      .forEach(p => catMap.set(p.node_id, (catMap.get(p.node_id) || 0) + 1));
+    const catGroup = document.getElementById('category-filter-group');
+    const catChipsEl = document.getElementById('category-chips');
+    if (catMap.size > 0 && activeSourceFilters.has('gpx_waypoint')) {
+      catGroup.classList.remove('hidden');
+      catChipsEl.innerHTML = '';
+      catMap.forEach((count, cat) => {
+        const color = catColorMap.get(cat) || '#a855f7';
+        const isActive = activeCategoryFilters.size === 0 || activeCategoryFilters.has(cat);
+        const btn = document.createElement('button');
+        btn.className = `filter-chip${isActive ? ' active' : ''}`;
+        btn.innerHTML = `<span class="chip-dot" style="background:${color};border-radius:2px;transform:rotate(45deg)"></span>${cat} <span style="opacity:0.5">${count}</span>`;
+        btn.onclick = () => toggleCategoryFilter(cat);
+        catChipsEl.appendChild(btn);
+      });
+    } else {
+      catGroup.classList.add('hidden');
+    }
+  }
+
+  function toggleSourceFilter(src) {
+    if (activeSourceFilters.has(src)) {
+      if (activeSourceFilters.size > 1) activeSourceFilters.delete(src);
+    } else {
+      activeSourceFilters.add(src);
+    }
+    const chip = document.getElementById(`chip-src-${src}`);
+    if (chip) chip.classList.toggle('active', activeSourceFilters.has(src));
+    updateMap();
+  }
+
+  function toggleCategoryFilter(cat) {
+    const allCats = [...new Set(positions.filter(p => p.source === 'gpx_waypoint').map(p => p.node_id))];
+    if (activeCategoryFilters.size === 0) {
+      activeCategoryFilters = new Set([cat]);
+    } else if (activeCategoryFilters.has(cat)) {
+      if (activeCategoryFilters.size === 1) activeCategoryFilters = new Set();
+      else activeCategoryFilters.delete(cat);
+    } else {
+      activeCategoryFilters.add(cat);
+      if (activeCategoryFilters.size === allCats.length) activeCategoryFilters = new Set();
+    }
+    renderFilterBar();
+    updateMap();
+  }
+
+  function toggleNodeFilter(nodeId) {
+    const allNodes = [...new Set(positions.map(p => p.node_id))];
+    if (activeNodeFilters.size === 0) {
+      activeNodeFilters = new Set([nodeId]);
+    } else if (activeNodeFilters.has(nodeId)) {
+      if (activeNodeFilters.size === 1) activeNodeFilters = new Set();
+      else activeNodeFilters.delete(nodeId);
+    } else {
+      activeNodeFilters.add(nodeId);
+      if (activeNodeFilters.size === allNodes.length) activeNodeFilters = new Set();
+    }
+    renderFilterBar();
+    updateMap();
+  }
+
+  // ── Calque GPX (overlay temporaire) ─────────────────────────
+  function openGPXOverlayModal() {
+    gpxOverlayData = null;
+    document.getElementById('gpx-overlay-file').value = '';
+    document.getElementById('gpx-overlay-preview').textContent = 'Sélectionnez un fichier .gpx';
+    document.getElementById('gpx-overlay-load-btn').disabled = true;
+    document.getElementById('gpx-overlay-modal').classList.remove('hidden');
+  }
+
+  function closeGPXOverlayModal() {
+    document.getElementById('gpx-overlay-modal').classList.add('hidden');
+  }
+
+  function parseGPXOverlay(xml) {
+    const doc = new DOMParser().parseFromString(xml, 'application/xml');
+    const tracks = [], waypoints = [];
+    doc.querySelectorAll('trk').forEach(trk => {
+      const name = trk.querySelector('name')?.textContent?.trim() || 'Tracé GPX';
+      const points = [];
+      trk.querySelectorAll('trkpt').forEach(pt => {
+        const lat = parseFloat(pt.getAttribute('lat')), lon = parseFloat(pt.getAttribute('lon'));
+        if (!isNaN(lat) && !isNaN(lon)) {
+          const ele = pt.querySelector('ele');
+          points.push({ lat, lon, alt: ele ? parseFloat(ele.textContent) : null });
+        }
+      });
+      if (points.length) tracks.push({ name, points });
+    });
+    doc.querySelectorAll('wpt').forEach(wpt => {
+      const lat = parseFloat(wpt.getAttribute('lat')), lon = parseFloat(wpt.getAttribute('lon'));
+      if (isNaN(lat) || isNaN(lon)) return;
+      const name = wpt.querySelector('name')?.textContent?.trim() || 'POI';
+      const desc = wpt.querySelector('desc')?.textContent?.trim() || '';
+      const ele = wpt.querySelector('ele');
+      const type = wpt.querySelector('type')?.textContent?.trim() || '';
+      waypoints.push({ lat, lon, name, desc, type, alt: ele ? parseFloat(ele.textContent) : null });
+    });
+    return { tracks, waypoints };
+  }
+
+  function loadGPXOverlay() {
+    if (!gpxOverlayData) return;
+    if (gpxOverlayLayerGroup) map.removeLayer(gpxOverlayLayerGroup);
+    gpxOverlayLayerGroup = L.layerGroup();
+    const palette = ['#a855f7', '#ec4899', '#06b6d4', '#84cc16', '#f59e0b'];
+    gpxOverlayData.tracks.forEach((trk, i) => {
+      const color = palette[i % palette.length];
+      L.polyline(trk.points.map(p => [p.lat, p.lon]), { color, weight: 3, opacity: 0.85, dashArray: '7,5' })
+        .addTo(gpxOverlayLayerGroup)
+        .bindPopup(`<div class="popup-title">${trk.name}</div><div class="popup-row">${trk.points.length} points</div>`);
+    });
+    gpxOverlayData.waypoints.forEach(wpt => {
+      const icon = L.divIcon({
+        html: `<div style="background:#a855f7;width:13px;height:13px;border-radius:3px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.5);transform:rotate(45deg)"></div>`,
+        iconSize: [13, 13], iconAnchor: [6, 6]
+      });
+      const popup = `<div class="popup-title">${wpt.name}</div>${wpt.type ? `<div class="popup-row">Type: <span>${wpt.type}</span></div>` : ''}${wpt.desc ? `<div class="popup-row">${wpt.desc}</div>` : ''}${wpt.alt ? `<div class="popup-row">Altitude: <span>${Math.round(wpt.alt)} m</span></div>` : ''}`;
+      L.marker([wpt.lat, wpt.lon], { icon }).addTo(gpxOverlayLayerGroup).bindPopup(popup);
+    });
+    gpxOverlayLayerGroup.addTo(map);
+    const trkCount = gpxOverlayData.tracks.length;
+    const wptCount = gpxOverlayData.waypoints.length;
+    const parts = [];
+    if (trkCount) parts.push(`${trkCount} tracé${trkCount > 1 ? 's' : ''}`);
+    if (wptCount) parts.push(`${wptCount} POI`);
+    document.getElementById('gpx-overlay-label').textContent = parts.join(' · ');
+    document.getElementById('gpx-overlay-badge').classList.remove('hidden');
+    closeGPXOverlayModal();
+  }
+
+  function clearGPXOverlay() {
+    if (gpxOverlayLayerGroup) { map.removeLayer(gpxOverlayLayerGroup); gpxOverlayLayerGroup = null; }
+    gpxOverlayData = null;
+    document.getElementById('gpx-overlay-badge').classList.add('hidden');
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeTraceModal(); closeGPXModal(); closeGPXOverlayModal(); closeDeleteModal(); closeDetailsModal(); closeSettingsModal(); closeWaypointEditModal(); document.getElementById('qr-modal').classList.add('hidden'); }
+    if (e.key === 'Enter' && !document.getElementById('trace-modal').classList.contains('hidden')) confirmNewTrace();
+  });
+
+  checkSession();
+</script>
+</body>
+</html>
