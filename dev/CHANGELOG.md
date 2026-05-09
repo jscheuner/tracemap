@@ -12,6 +12,8 @@
 - Route `PUT /api/positions/:id` et `DELETE /api/positions/:id`
 - Extraction credentials dans `config.local.js` (gitignore)
 - Dossier `dev/` : ARCHITECTURE.md, API.md, FEATURES.md, CHANGELOG.md
+- Bouton "✏️ Modifier" dans la bulle popup des waypoints → ouvre directement le modal d'édition
+- Modal édition waypoint : nom, dossier, date, lat/lon readonly, altitude
 
 ### Modifié
 - Bouton info (ⓘ) fusionné dans le crayon (✏️) → ouvre modal détails

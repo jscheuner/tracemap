@@ -270,10 +270,30 @@
   <div class="modal-box">
     <h3>Modifier le point GPS</h3>
     <input type="hidden" id="wpt-edit-id"/>
+
     <label>Nom</label>
     <input type="text" id="wpt-edit-name" placeholder="Nom du point"/>
+
     <label style="margin-top:0.75rem; display:block;">Dossier / Catégorie</label>
     <input type="text" id="wpt-edit-category" placeholder="Ex: Bivouacs, Restaurants…" style="margin-top:0.4rem;"/>
+
+    <label style="margin-top:0.75rem; display:block;">Date de création</label>
+    <input type="datetime-local" id="wpt-edit-date" style="margin-top:0.4rem; width:100%; padding:0.6rem 0.75rem; background:#0f172a; border:1px solid #334155; border-radius:8px; color:#e2e8f0; font-size:0.9rem; outline:none; margin-bottom:0.75rem;"/>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; margin-bottom:0.75rem;">
+      <div>
+        <label style="font-size:0.8rem; color:#94a3b8; display:block; margin-bottom:0.3rem;">Latitude</label>
+        <input type="text" id="wpt-edit-lat" readonly style="width:100%; padding:0.5rem 0.75rem; background:#0f172a; border:1px solid #1e2d40; border-radius:8px; color:#64748b; font-size:0.85rem; outline:none; cursor:default;"/>
+      </div>
+      <div>
+        <label style="font-size:0.8rem; color:#94a3b8; display:block; margin-bottom:0.3rem;">Longitude</label>
+        <input type="text" id="wpt-edit-lon" readonly style="width:100%; padding:0.5rem 0.75rem; background:#0f172a; border:1px solid #1e2d40; border-radius:8px; color:#64748b; font-size:0.85rem; outline:none; cursor:default;"/>
+      </div>
+    </div>
+
+    <label style="display:block; margin-bottom:0.3rem;">Altitude (m)</label>
+    <input type="number" id="wpt-edit-alt" placeholder="—" style="width:100%; padding:0.6rem 0.75rem; background:#0f172a; border:1px solid #334155; border-radius:8px; color:#e2e8f0; font-size:0.9rem; outline:none; margin-bottom:0.25rem;"/>
+
     <div class="modal-actions" style="justify-content:space-between;">
       <button class="btn btn-danger" onclick="deleteWaypointFromModal()">Supprimer</button>
       <div style="display:flex;gap:0.75rem;">
@@ -564,7 +584,7 @@
             <div class="wpt-item" onclick="centerOnWaypoint(${w.latitude},${w.longitude})">
               <span class="wpt-dot" style="background:${color}"></span>
               <span class="wpt-name">${escHtml(w.node_name || w.node_id)}</span>
-              <button class="rename-btn" onclick="event.stopPropagation();openWaypointEditModal(${w.id},'${escHtml(w.node_name||'')}','${escHtml(w.node_id||'')}')">✏️</button>
+              <button class="rename-btn" onclick="event.stopPropagation();openWaypointEditModal(${w.id})">✏️</button>
               <button class="rename-btn" style="color:#ef4444" onclick="event.stopPropagation();deleteWaypoint(${w.id})">🗑️</button>
             </div>`).join('')}
         </div>
@@ -591,10 +611,18 @@
   }
 
   // ── Édition waypoint ─────────────────────────────────────────
-  function openWaypointEditModal(id, name, category) {
+  function openWaypointEditModal(id) {
+    const w = positions.find(p => p.id === id);
+    if (!w) return;
     document.getElementById('wpt-edit-id').value = id;
-    document.getElementById('wpt-edit-name').value = name;
-    document.getElementById('wpt-edit-category').value = category;
+    document.getElementById('wpt-edit-name').value = w.node_name || '';
+    document.getElementById('wpt-edit-category').value = w.node_id || '';
+    document.getElementById('wpt-edit-lat').value = w.latitude?.toFixed(6) ?? '';
+    document.getElementById('wpt-edit-lon').value = w.longitude?.toFixed(6) ?? '';
+    document.getElementById('wpt-edit-alt').value = w.altitude != null ? Math.round(w.altitude) : '';
+    const dt = new Date(w.timestamp * 1000);
+    const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    document.getElementById('wpt-edit-date').value = local;
     document.getElementById('wpt-edit-modal').classList.remove('hidden');
     setTimeout(() => document.getElementById('wpt-edit-name').select(), 50);
   }
@@ -604,11 +632,19 @@
     const id = document.getElementById('wpt-edit-id').value;
     const name = document.getElementById('wpt-edit-name').value.trim();
     const category = document.getElementById('wpt-edit-category').value.trim();
+    const altVal = document.getElementById('wpt-edit-alt').value;
+    const dateVal = document.getElementById('wpt-edit-date').value;
     if (!name) return;
+    const payload = {
+      node_name: name,
+      node_id: category || 'Waypoints',
+      altitude: altVal !== '' ? parseFloat(altVal) : null,
+      timestamp: dateVal ? Math.floor(new Date(dateVal).getTime() / 1000) : undefined,
+    };
     await fetch(`${SECRET_PATH}/api/positions/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'x-session-token': sessionToken },
-      body: JSON.stringify({ node_name: name, node_id: category || 'Waypoints' })
+      body: JSON.stringify(payload)
     });
     closeWaypointEditModal();
     await loadPositions();
@@ -907,7 +943,10 @@
     return `<div class="popup-title" style="color:${color}">${p.node_name || p.node_id}</div>
       <div class="popup-row">Dossier: <span>${p.node_id}</span></div>
       ${p.altitude ? `<div class="popup-row">Altitude: <span>${Math.round(p.altitude)} m</span></div>` : ''}
-      <div class="popup-row">Pos: <span>${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}</span></div>`;
+      <div class="popup-row">Pos: <span>${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}</span></div>
+      <div style="margin-top:0.5rem; text-align:right;">
+        <button onclick="openWaypointEditModal(${p.id})" style="background:#334155; border:none; color:#94a3b8; border-radius:6px; padding:0.25rem 0.6rem; font-size:0.75rem; cursor:pointer;">✏️ Modifier</button>
+      </div>`;
   }
 
   function updateMap() {
