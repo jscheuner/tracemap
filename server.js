@@ -659,6 +659,12 @@ app.post(`/${CONFIG.secretPath}/api/photos/confirm`, (req, res) => {
   res.json({ id: result.lastInsertRowid, filepath });
 });
 
+app.get(`/${CONFIG.secretPath}/api/photos/summary`, (req, res) => {
+  if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
+  const rows = db.prepare('SELECT DISTINCT position_id FROM photos').all();
+  res.json(rows.map(r => r.position_id));
+});
+
 app.get(`/${CONFIG.secretPath}/api/photos`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const { position_id } = req.query;

@@ -299,6 +299,18 @@
   </div>
 </div>
 
+<!-- Modal carrousel photos -->
+<div id="carousel-modal" class="modal-overlay hidden" onclick="closeCarouselOutside(event)" style="background:rgba(0,0,0,0.9);">
+  <button onclick="closeCarousel()" style="position:fixed;top:16px;right:20px;background:none;border:none;color:#e2e8f0;font-size:1.6rem;cursor:pointer;z-index:1;">✕</button>
+  <button onclick="carouselPrev()" style="position:fixed;left:12px;background:rgba(255,255,255,0.1);border:none;color:#e2e8f0;font-size:1.8rem;cursor:pointer;padding:0.5rem 0.75rem;border-radius:8px;z-index:1;">‹</button>
+  <div style="display:flex;flex-direction:column;align-items:center;gap:0.75rem;max-width:95vw;max-height:95vh;">
+    <img id="carousel-img" src="" style="max-width:90vw;max-height:82vh;object-fit:contain;border-radius:8px;" onclick="event.stopPropagation()"/>
+    <div id="carousel-counter" style="font-size:0.85rem;color:#94a3b8;"></div>
+    <div id="carousel-name" style="font-size:0.9rem;color:#e2e8f0;"></div>
+  </div>
+  <button onclick="carouselNext()" style="position:fixed;right:12px;background:rgba(255,255,255,0.1);border:none;color:#e2e8f0;font-size:1.8rem;cursor:pointer;padding:0.5rem 0.75rem;border-radius:8px;z-index:1;">›</button>
+</div>
+
 <!-- Modal import photo -->
 <div id="photo-import-modal" class="modal-overlay hidden">
   <div class="modal-box">
@@ -630,7 +642,7 @@
     document.getElementById('header').classList.remove('hidden');
     document.getElementById('app-body').classList.remove('hidden');
     if (window.innerWidth <= 680) document.getElementById('sidebar').classList.add('collapsed');
-    initMap(); loadTraces(); loadPositions(); startAutoRefresh();
+    initMap(); loadTraces(); loadPositions(); loadPhotoSummary(); startAutoRefresh();
   }
 
   async function checkSession() {
@@ -877,6 +889,16 @@
 
   // ── Photos ───────────────────────────────────────────────────
 
+  let wptPhotoIds = new Set();
+
+  async function loadPhotoSummary() {
+    try {
+      const res = await fetch(`${SECRET_PATH}/api/photos/summary`, { headers: { 'x-session-token': sessionToken } });
+      if (res.ok) { wptPhotoIds = new Set(await res.json()); }
+    } catch {}
+    updateMap();
+  }
+
   async function loadWaypointPhotos(positionId) {
     const res = await fetch(`${SECRET_PATH}/api/photos?position_id=${positionId}`, { headers: { 'x-session-token': sessionToken } });
     return res.ok ? res.json() : [];
@@ -909,6 +931,7 @@
     if (res.ok) {
       const photos = await loadWaypointPhotos(positionId);
       renderWaypointPhotos(photos, positionId);
+      loadPhotoSummary();
     }
   }
 
@@ -917,6 +940,7 @@
     await fetch(`${SECRET_PATH}/api/photos/${photoId}`, { method: 'DELETE', headers: { 'x-session-token': sessionToken } });
     const photos = await loadWaypointPhotos(positionId);
     renderWaypointPhotos(photos, positionId);
+    loadPhotoSummary();
   }
 
   // ── Import photo standalone (GPS matching) ───────────────────
@@ -990,6 +1014,34 @@
     }
   }
 
+  // ── Carrousel photos ─────────────────────────────────────────
+
+  let carouselPhotos = [];
+  let carouselIdx = 0;
+
+  async function openPhotoCarousel(positionId) {
+    carouselPhotos = await loadWaypointPhotos(positionId);
+    if (!carouselPhotos.length) return;
+    carouselIdx = 0;
+    renderCarousel();
+    document.getElementById('carousel-modal').classList.remove('hidden');
+  }
+
+  function renderCarousel() {
+    const p = carouselPhotos[carouselIdx];
+    const url = `${SECRET_PATH}/photos/${p.filepath.replace(/\\/g,'/')}?token=${sessionToken}`;
+    document.getElementById('carousel-img').src = url;
+    document.getElementById('carousel-counter').textContent = `${carouselIdx + 1} / ${carouselPhotos.length}`;
+    document.getElementById('carousel-name').textContent = p.original_name || '';
+    document.querySelectorAll('#carousel-modal button[onclick^="carouselPrev"], #carousel-modal button[onclick^="carouselNext"]')
+      .forEach(b => b.style.opacity = carouselPhotos.length > 1 ? '1' : '0.2');
+  }
+
+  function carouselPrev() { carouselIdx = (carouselIdx - 1 + carouselPhotos.length) % carouselPhotos.length; renderCarousel(); }
+  function carouselNext() { carouselIdx = (carouselIdx + 1) % carouselPhotos.length; renderCarousel(); }
+  function closeCarousel() { document.getElementById('carousel-modal').classList.add('hidden'); }
+  function closeCarouselOutside(e) { if (e.target === document.getElementById('carousel-modal')) closeCarousel(); }
+
   async function confirmPhotoImport() {
     const positionId = document.getElementById('photo-import-wpt-select').value;
     if (!positionId || !photoImportTempId) return;
@@ -998,7 +1050,7 @@
       headers: { 'Content-Type': 'application/json', 'x-session-token': sessionToken },
       body: JSON.stringify({ tempId: photoImportTempId, position_id: parseInt(positionId), original_name: photoImportOriginalName })
     });
-    if (res.ok) { closePhotoImportModal(); }
+    if (res.ok) { closePhotoImportModal(); loadPhotoSummary(); }
     else { alert('Erreur lors de la liaison.'); }
   }
 
@@ -1281,13 +1333,14 @@
     return m;
   }
 
-  function buildWaypointPopup(p, color) {
+  function buildWaypointPopup(p, color, hasPhotos) {
     return `<div class="popup-title" style="color:${color}">${p.node_name || p.node_id}</div>
       <div class="popup-row">Dossier: <span>${p.node_id}</span></div>
       <div class="popup-row">Date: <span>${new Date(p.timestamp*1000).toLocaleString('fr-CH')}</span></div>
       ${p.altitude ? `<div class="popup-row">Altitude: <span>${Math.round(p.altitude)} m</span></div>` : ''}
       <div class="popup-row">Pos: <span>${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}</span></div>
-      <div style="margin-top:0.5rem; text-align:right;">
+      <div style="margin-top:0.5rem; display:flex; gap:0.4rem; justify-content:flex-end;">
+        ${hasPhotos ? `<button onclick="openPhotoCarousel(${p.id})" style="background:#78350f; border:none; color:#fbbf24; border-radius:6px; padding:0.25rem 0.6rem; font-size:0.75rem; cursor:pointer;">📷 Photos</button>` : ''}
         <button onclick="openWaypointEditModal(${p.id})" style="background:#334155; border:none; color:#94a3b8; border-radius:6px; padding:0.25rem 0.6rem; font-size:0.75rem; cursor:pointer;">✏️ Modifier</button>
       </div>`;
   }
@@ -1318,11 +1371,15 @@
 
     wayptPts.forEach(p => {
       const color = catColorMap.get(p.node_id) || '#a855f7';
+      const hasPhotos = wptPhotoIds.has(p.id);
       const icon = L.divIcon({
-        html: `<div style="background:${color};width:11px;height:11px;border-radius:2px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.5);transform:rotate(45deg)"></div>`,
-        iconSize: [13, 13], iconAnchor: [6, 6]
+        html: `<div style="position:relative;width:18px;height:18px;">
+          <div style="background:${color};width:11px;height:11px;border-radius:2px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.5);transform:rotate(45deg);position:absolute;top:3px;left:3px;"></div>
+          ${hasPhotos ? '<div style="position:absolute;top:-3px;right:-3px;background:#f59e0b;border-radius:50%;width:9px;height:9px;font-size:6px;display:flex;align-items:center;justify-content:center;line-height:1;border:1px solid #fff;">📷</div>' : ''}
+        </div>`,
+        iconSize: [18, 18], iconAnchor: [9, 9]
       });
-      markers.push(L.marker([p.latitude,p.longitude],{icon}).addTo(map).bindPopup(buildWaypointPopup(p, color)));
+      markers.push(L.marker([p.latitude,p.longitude],{icon}).addTo(map).bindPopup(buildWaypointPopup(p, color, hasPhotos)));
     });
 
     document.getElementById('status-text').textContent = 'En ligne';
