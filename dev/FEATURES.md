@@ -23,6 +23,7 @@
 - [x] Suppression d'un dossier complet (avec confirmation mot de passe)
 - [x] Photos sur les waypoints : ajout depuis le modal d'édition
 - [x] Import photo avec extraction GPS EXIF — liaison automatique si match dans le rayon configuré, sinon picker manuel
+- [x] Bouton "📍 Utiliser ma position actuelle" quand aucun GPS trouvé (contournement Google Photos) — pré-sélectionne le waypoint le plus proche
 - [x] Rayon de correspondance photo configurable dans ⚙️ (défaut 50 m)
 
 ### Interface admin

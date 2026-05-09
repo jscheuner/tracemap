@@ -22,6 +22,7 @@
   - Bouton "📷 Photo" dans le toolbar
   - Paramètre `photoMatchRadius` (défaut 50 m) dans ⚙️ Paramètres
   - Timeout 8 s sur l'extraction EXIF pour éviter les blocages
+- Bouton "📍 Utiliser ma position actuelle" dans le picker photo quand aucun GPS n'est trouvé (contournement Google Photos qui supprime l'EXIF) — pré-sélectionne le waypoint le plus proche et colorise selon la distance
 - Packages : `exifr`, `multer`
 
 ### Modifié
