@@ -8,6 +8,9 @@ const mqtt = require('mqtt');
 const Database = require('better-sqlite3');
 const crypto = require('crypto');
 const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
+const exifr = require('exifr');
 
 const localConfig = require('./config.local.js');
 const CONFIG = {
@@ -22,6 +25,27 @@ const CONFIG = {
   dbPath: path.join(__dirname, 'data', 'positions.db'),
   keepDays: 36500,
 };
+
+const PHOTOS_DIR = path.join(__dirname, 'data', 'photos');
+const PHOTOS_TMP = path.join(__dirname, 'data', 'photos', 'tmp');
+fs.mkdirSync(PHOTOS_TMP, { recursive: true });
+
+const uploadTmp = multer({
+  dest: PHOTOS_TMP,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Fichier non image'));
+  }
+});
+
+function haversineMeters(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.asin(Math.sqrt(a));
+}
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -60,6 +84,14 @@ try { db.exec("ALTER TABLE traces ADD COLUMN color TEXT DEFAULT '#3b82f6'"); } c
 try { db.exec("ALTER TABLE traces ADD COLUMN description TEXT"); } catch {}
 
 db.exec(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);`);
+
+db.exec(`CREATE TABLE IF NOT EXISTS photos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  position_id INTEGER NOT NULL,
+  filepath TEXT NOT NULL,
+  original_name TEXT,
+  created_at INTEGER DEFAULT (strftime('%s','now'))
+);`);
 db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run('autoRollover', 'true');
 
 function getSetting(key) {
@@ -504,9 +536,11 @@ app.put(`/${CONFIG.secretPath}/api/traces/:id/end`, (req, res) => {
 
 app.put(`/${CONFIG.secretPath}/api/positions/:id`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
-  const { node_name, node_id } = req.body;
+  const { node_name, node_id, altitude, timestamp } = req.body;
   if (node_name !== undefined) db.prepare('UPDATE positions SET node_name = ? WHERE id = ?').run(node_name, req.params.id);
   if (node_id !== undefined) db.prepare('UPDATE positions SET node_id = ? WHERE id = ?').run(node_id, req.params.id);
+  if (altitude !== undefined) db.prepare('UPDATE positions SET altitude = ? WHERE id = ?').run(altitude, req.params.id);
+  if (timestamp !== undefined) db.prepare('UPDATE positions SET timestamp = ? WHERE id = ?').run(timestamp, req.params.id);
   res.json(db.prepare('SELECT * FROM positions WHERE id = ?').get(req.params.id));
 });
 
@@ -547,6 +581,92 @@ app.post(`/${CONFIG.secretPath}/api/positions/ingest`, (req, res) => {
     return count;
   });
   res.json({ success: true, inserted: insertMany(points) });
+});
+
+// ── Photos ───────────────────────────────────────────────────
+
+app.get(`/${CONFIG.secretPath}/photos/*`, (req, res) => {
+  if (!isAuthenticated(req)) return res.status(401).send('Non autorisé');
+  const safePath = path.normalize(req.params[0]).replace(/^(\.\.(\/|\\|$))+/, '');
+  res.sendFile(safePath, { root: PHOTOS_DIR });
+});
+
+app.post(`/${CONFIG.secretPath}/api/photos/upload`, uploadTmp.single('photo'), async (req, res) => {
+  if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
+  const file = req.file;
+  if (!file) return res.status(400).json({ error: 'Aucun fichier' });
+  const position_id = req.body.position_id ? parseInt(req.body.position_id) : null;
+
+  let gps = null;
+  try {
+    const exif = await exifr.gps(file.path);
+    if (exif && exif.latitude != null && exif.longitude != null) gps = { lat: exif.latitude, lon: exif.longitude };
+  } catch (e) {}
+
+  const ext = path.extname(file.originalname || '').toLowerCase() || '.jpg';
+
+  const savePhoto = (wpt) => {
+    const folder = wpt.node_id.replace(/[^a-zA-Z0-9_\-]/g, '_');
+    const dir = path.join(PHOTOS_DIR, folder);
+    fs.mkdirSync(dir, { recursive: true });
+    const filename = `${wpt.id}_${Date.now()}${ext}`;
+    const filepath = path.join(folder, filename);
+    fs.renameSync(file.path, path.join(PHOTOS_DIR, filepath));
+    return db.prepare('INSERT INTO photos (position_id, filepath, original_name) VALUES (?, ?, ?)').run(wpt.id, filepath, file.originalname || filename);
+  };
+
+  if (position_id) {
+    const wpt = db.prepare('SELECT * FROM positions WHERE id = ?').get(position_id);
+    if (!wpt) { fs.unlinkSync(file.path); return res.status(404).json({ error: 'Waypoint introuvable' }); }
+    const result = savePhoto(wpt);
+    return res.json({ id: result.lastInsertRowid, filepath: db.prepare('SELECT filepath FROM photos WHERE id = ?').get(result.lastInsertRowid).filepath, gps });
+  }
+
+  const radius = parseInt(req.query.radius) || 50;
+  let candidates = [];
+  if (gps) {
+    candidates = db.prepare("SELECT * FROM positions WHERE source = 'gpx_waypoint'").all()
+      .map(w => ({ id: w.id, node_name: w.node_name, node_id: w.node_id, dist: Math.round(haversineMeters(gps.lat, gps.lon, w.latitude, w.longitude)) }))
+      .filter(w => w.dist <= radius)
+      .sort((a, b) => a.dist - b.dist)
+      .slice(0, 5);
+  }
+  res.json({ tempId: file.filename, originalName: file.originalname, gps, candidates });
+});
+
+app.post(`/${CONFIG.secretPath}/api/photos/confirm`, (req, res) => {
+  if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
+  const { tempId, position_id, original_name } = req.body;
+  if (!tempId || !position_id) return res.status(400).json({ error: 'Paramètres manquants' });
+  const wpt = db.prepare('SELECT * FROM positions WHERE id = ?').get(parseInt(position_id));
+  if (!wpt) return res.status(404).json({ error: 'Waypoint introuvable' });
+  const tmpPath = path.join(PHOTOS_TMP, tempId);
+  if (!fs.existsSync(tmpPath)) return res.status(404).json({ error: 'Fichier temporaire introuvable' });
+  const ext = path.extname(original_name || '').toLowerCase() || '.jpg';
+  const folder = wpt.node_id.replace(/[^a-zA-Z0-9_\-]/g, '_');
+  fs.mkdirSync(path.join(PHOTOS_DIR, folder), { recursive: true });
+  const filename = `${wpt.id}_${Date.now()}${ext}`;
+  const filepath = path.join(folder, filename);
+  fs.renameSync(tmpPath, path.join(PHOTOS_DIR, filepath));
+  const result = db.prepare('INSERT INTO photos (position_id, filepath, original_name) VALUES (?, ?, ?)').run(parseInt(position_id), filepath, original_name || filename);
+  res.json({ id: result.lastInsertRowid, filepath });
+});
+
+app.get(`/${CONFIG.secretPath}/api/photos`, (req, res) => {
+  if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
+  const { position_id } = req.query;
+  if (!position_id) return res.status(400).json({ error: 'position_id requis' });
+  res.json(db.prepare('SELECT * FROM photos WHERE position_id = ? ORDER BY created_at').all(parseInt(position_id)));
+});
+
+app.delete(`/${CONFIG.secretPath}/api/photos/:id`, (req, res) => {
+  if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
+  const photo = db.prepare('SELECT * FROM photos WHERE id = ?').get(parseInt(req.params.id));
+  if (!photo) return res.status(404).json({ error: 'Photo introuvable' });
+  const fullPath = path.join(PHOTOS_DIR, photo.filepath);
+  if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+  db.prepare('DELETE FROM photos WHERE id = ?').run(photo.id);
+  res.json({ success: true });
 });
 
 app.get('/tracker-app.html', (req, res) => {

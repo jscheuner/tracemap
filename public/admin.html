@@ -74,6 +74,12 @@
     .trace-active-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; flex-shrink: 0; }
     .rename-btn { flex-shrink: 0; background: none; border: none; color: #475569; cursor: pointer; font-size: 0.8rem; padding: 1px 3px; border-radius: 3px; }
     .rename-btn:hover { color: #94a3b8; background: #334155; }
+    .photo-grid { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.5rem 0; }
+    .photo-thumb { position: relative; width: 80px; height: 80px; border-radius: 6px; overflow: hidden; border: 1px solid #334155; cursor: pointer; }
+    .photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .photo-thumb-del { position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.7); color: #f87171; border: none; border-radius: 4px; width: 18px; height: 18px; font-size: 0.65rem; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; }
+    .photo-add-btn { width: 80px; height: 80px; border-radius: 6px; border: 1px dashed #334155; background: none; color: #475569; font-size: 1.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .photo-add-btn:hover { border-color: #64748b; color: #94a3b8; }
     .trace-meta { font-size: 0.72rem; color: #64748b; margin-top: 0.2rem; }
     .trace-pts { font-size: 0.72rem; color: #475569; margin-top: 0.15rem; }
 
@@ -234,6 +240,30 @@
   </div>
 </div>
 
+<!-- Modal import photo -->
+<div id="photo-import-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <h3>Importer une photo</h3>
+    <div id="photo-import-step1">
+      <p style="color:#94a3b8; font-size:0.85rem; margin-bottom:0.75rem;">Sélectionnez une photo. Si elle contient des coordonnées GPS, le waypoint correspondant sera proposé automatiquement.</p>
+      <input type="file" id="photo-import-input" accept="image/*" style="display:none" onchange="handlePhotoImportFile(this)"/>
+      <button class="btn btn-primary" style="width:100%" onclick="document.getElementById('photo-import-input').click()">Choisir une photo…</button>
+      <p id="photo-import-uploading" style="display:none; color:#94a3b8; font-size:0.85rem; margin-top:0.75rem; text-align:center;">Analyse en cours…</p>
+    </div>
+    <div id="photo-import-step2" style="display:none">
+      <div id="photo-import-preview" style="margin-bottom:0.75rem; text-align:center;"></div>
+      <p id="photo-import-gps-info" style="font-size:0.82rem; color:#94a3b8; margin-bottom:0.5rem;"></p>
+      <label style="display:block; margin-bottom:0.3rem;">Lier à ce waypoint</label>
+      <select id="photo-import-wpt-select" style="width:100%; padding:0.6rem 0.75rem; background:#0f172a; border:1px solid #334155; border-radius:8px; color:#e2e8f0; font-size:0.9rem; outline:none; margin-bottom:0.75rem;"></select>
+      <div id="photo-import-match-info" style="font-size:0.82rem; color:#34d399; margin-bottom:0.5rem; display:none;"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closePhotoImportModal()">Annuler</button>
+        <button class="btn btn-primary" onclick="confirmPhotoImport()">Lier la photo</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal suppression dossier waypoints -->
 <div id="delete-folder-modal" class="modal-overlay hidden">
   <div class="modal-box">
@@ -310,7 +340,13 @@
     </div>
 
     <label style="display:block; margin-bottom:0.3rem;">Altitude (m)</label>
-    <input type="number" id="wpt-edit-alt" placeholder="—" style="width:100%; padding:0.6rem 0.75rem; background:#0f172a; border:1px solid #334155; border-radius:8px; color:#e2e8f0; font-size:0.9rem; outline:none; margin-bottom:0.25rem;"/>
+    <input type="number" id="wpt-edit-alt" placeholder="—" style="width:100%; padding:0.6rem 0.75rem; background:#0f172a; border:1px solid #334155; border-radius:8px; color:#e2e8f0; font-size:0.9rem; outline:none; margin-bottom:0.75rem;"/>
+
+    <label style="display:block; margin-bottom:0.4rem;">Photos</label>
+    <div id="wpt-photos-grid" class="photo-grid">
+      <button class="photo-add-btn" onclick="triggerPhotoUpload()" title="Ajouter une photo">＋</button>
+    </div>
+    <input type="file" id="wpt-photo-input" accept="image/*" style="display:none" onchange="handlePhotoFileSelected(this)"/>
 
     <div class="modal-actions" style="justify-content:space-between;">
       <button class="btn btn-danger" onclick="deleteWaypointFromModal()">Supprimer</button>
@@ -425,6 +461,7 @@
         <button class="btn btn-ghost" id="trail-btn" onclick="toggleTrail()">Trajet</button>
         <button class="btn btn-ghost" onclick="openGPXModal()" title="Importer un GPX dans la base">↑ Import</button>
         <button class="btn btn-ghost" onclick="openGPXOverlayModal()" title="Afficher un GPX en superposition temporaire">Import temporaire</button>
+        <button class="btn btn-ghost" onclick="openPhotoImportModal()" title="Importer une photo et la lier à un waypoint">📷 Photo</button>
         <button class="btn btn-ghost" onclick="openPhoneQR()">QR</button>
         <button class="btn btn-ghost btn-icon" onclick="openSettingsModal()" title="Paramètres">⚙️</button>
       </div>
@@ -642,8 +679,10 @@
     const dt = new Date(w.timestamp * 1000);
     const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     document.getElementById('wpt-edit-date').value = local;
+    document.getElementById('wpt-photos-grid').innerHTML = `<button class="photo-add-btn" onclick="triggerPhotoUpload()">＋</button>`;
     document.getElementById('wpt-edit-modal').classList.remove('hidden');
     setTimeout(() => document.getElementById('wpt-edit-name').select(), 50);
+    loadWaypointPhotos(id).then(photos => renderWaypointPhotos(photos, id));
   }
   function closeWaypointEditModal() { document.getElementById('wpt-edit-modal').classList.add('hidden'); }
 
@@ -718,6 +757,127 @@
     closeDeleteFolderModal();
     await loadPositions();
     renderWaypointsSidebar();
+  }
+
+  // ── Photos ───────────────────────────────────────────────────
+
+  async function loadWaypointPhotos(positionId) {
+    const res = await fetch(`${SECRET_PATH}/api/photos?position_id=${positionId}`, { headers: { 'x-session-token': sessionToken } });
+    return res.ok ? res.json() : [];
+  }
+
+  function renderWaypointPhotos(photos, positionId) {
+    const grid = document.getElementById('wpt-photos-grid');
+    if (!grid) return;
+    const thumbs = photos.map(p => `
+      <div class="photo-thumb" onclick="window.open('${SECRET_PATH}/photos/${p.filepath.replace(/\\/g,'/')}?token=${sessionToken}','_blank')">
+        <img src="${SECRET_PATH}/photos/${p.filepath.replace(/\\/g,'/')}?token=${sessionToken}" alt="${p.original_name || ''}"/>
+        <button class="photo-thumb-del" onclick="event.stopPropagation();deleteWaypointPhoto(${p.id},${positionId})" title="Supprimer">✕</button>
+      </div>`).join('');
+    grid.innerHTML = thumbs + `<button class="photo-add-btn" onclick="triggerPhotoUpload()" title="Ajouter une photo">＋</button>`;
+  }
+
+  function triggerPhotoUpload() {
+    document.getElementById('wpt-photo-input').value = '';
+    document.getElementById('wpt-photo-input').click();
+  }
+
+  async function handlePhotoFileSelected(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const positionId = document.getElementById('wpt-edit-id').value;
+    const fd = new FormData();
+    fd.append('photo', file);
+    fd.append('position_id', positionId);
+    const res = await fetch(`${SECRET_PATH}/api/photos/upload`, { method: 'POST', headers: { 'x-session-token': sessionToken }, body: fd });
+    if (res.ok) {
+      const photos = await loadWaypointPhotos(positionId);
+      renderWaypointPhotos(photos, positionId);
+    }
+  }
+
+  async function deleteWaypointPhoto(photoId, positionId) {
+    if (!confirm('Supprimer cette photo ?')) return;
+    await fetch(`${SECRET_PATH}/api/photos/${photoId}`, { method: 'DELETE', headers: { 'x-session-token': sessionToken } });
+    const photos = await loadWaypointPhotos(positionId);
+    renderWaypointPhotos(photos, positionId);
+  }
+
+  // ── Import photo standalone (GPS matching) ───────────────────
+
+  let photoImportTempId = null;
+  let photoImportOriginalName = null;
+
+  function openPhotoImportModal() {
+    document.getElementById('photo-import-step1').style.display = '';
+    document.getElementById('photo-import-step2').style.display = 'none';
+    document.getElementById('photo-import-uploading').style.display = 'none';
+    document.getElementById('photo-import-input').value = '';
+    photoImportTempId = null;
+    photoImportOriginalName = null;
+    document.getElementById('photo-import-modal').classList.remove('hidden');
+  }
+
+  function closePhotoImportModal() {
+    document.getElementById('photo-import-modal').classList.add('hidden');
+    photoImportTempId = null;
+  }
+
+  async function handlePhotoImportFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+    document.getElementById('photo-import-uploading').style.display = '';
+    const fd = new FormData();
+    fd.append('photo', file);
+    const res = await fetch(`${SECRET_PATH}/api/photos/upload`, { method: 'POST', headers: { 'x-session-token': sessionToken }, body: fd });
+    if (!res.ok) { alert('Erreur lors de l\'envoi.'); return; }
+    const data = await res.json();
+    photoImportTempId = data.tempId;
+    photoImportOriginalName = data.originalName;
+
+    // Preview
+    const preview = document.getElementById('photo-import-preview');
+    const url = URL.createObjectURL(file);
+    preview.innerHTML = `<img src="${url}" style="max-width:100%; max-height:160px; border-radius:6px; border:1px solid #334155;"/>`;
+
+    // GPS info
+    const gpsInfo = document.getElementById('photo-import-gps-info');
+    const matchInfo = document.getElementById('photo-import-match-info');
+    if (data.gps) {
+      gpsInfo.textContent = `📍 GPS: ${data.gps.lat.toFixed(5)}, ${data.gps.lon.toFixed(5)}`;
+    } else {
+      gpsInfo.textContent = 'Aucune position GPS dans la photo.';
+    }
+
+    // Dropdown de tous les waypoints
+    const wpts = positions.filter(p => p.source === 'gpx_waypoint');
+    const sel = document.getElementById('photo-import-wpt-select');
+    sel.innerHTML = wpts.map(w => `<option value="${w.id}">${w.node_name || w.node_id} (${w.node_id})</option>`).join('');
+
+    // Pré-sélectionner le meilleur candidat
+    if (data.candidates && data.candidates.length > 0) {
+      sel.value = data.candidates[0].id;
+      matchInfo.textContent = `✓ Waypoint proche trouvé : "${data.candidates[0].node_name}" à ${data.candidates[0].dist} m`;
+      matchInfo.style.display = '';
+    } else {
+      matchInfo.style.display = 'none';
+    }
+
+    document.getElementById('photo-import-uploading').style.display = 'none';
+    document.getElementById('photo-import-step1').style.display = 'none';
+    document.getElementById('photo-import-step2').style.display = '';
+  }
+
+  async function confirmPhotoImport() {
+    const positionId = document.getElementById('photo-import-wpt-select').value;
+    if (!positionId || !photoImportTempId) return;
+    const res = await fetch(`${SECRET_PATH}/api/photos/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-session-token': sessionToken },
+      body: JSON.stringify({ tempId: photoImportTempId, position_id: parseInt(positionId), original_name: photoImportOriginalName })
+    });
+    if (res.ok) { closePhotoImportModal(); }
+    else { alert('Erreur lors de la liaison.'); }
   }
 
   function selectTrace(id) {
