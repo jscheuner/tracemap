@@ -31,6 +31,7 @@
 - [x] Toolbar en 3 zones (gestion tracés / période / outils)
 - [x] Filter bar : chips par source + dossiers POI + appareils GPS
 - [x] Rendu distinct losanges colorés pour waypoints (hors polyline)
+- [x] Interface responsive mobile (sidebar overlay, toolbar/filter scroll horizontal)
 - [x] Auto-refresh (30s)
 - [x] Toggle trajet (polyline)
 - [x] Centrage carte sur dernière position

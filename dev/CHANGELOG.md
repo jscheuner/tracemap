@@ -25,6 +25,7 @@
 - Packages : `exifr`, `multer`
 
 ### Modifié
+- Interface responsive mobile (breakpoint 680px) : sidebar overlay avec backdrop, toolbar scroll horizontal, header compact, filter bar scroll, modals adaptés
 - Bouton info (ⓘ) fusionné dans le crayon (✏️) → ouvre modal détails
 - `GET /api/positions` : inclut toujours les `gpx_waypoint` quelle que soit la fenêtre temporelle
 - Process PM2 renommé `meshtastic-tracker` → `tracemap`
