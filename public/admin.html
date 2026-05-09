@@ -482,6 +482,7 @@
     <div id="sidebar-header">
       <div id="sidebar-top-row">
         <span id="sidebar-title">Tracés</span>
+        <button class="icon-btn" id="sort-btn" onclick="toggleSort()" title="Trier par date" style="font-size:0.75rem; width:auto; padding:0 0.45rem; gap:0.2rem; display:flex; align-items:center;">↓ Date</button>
         <button class="icon-btn" onclick="toggleSidebar()" title="Réduire">←</button>
       </div>
       <div id="sidebar-tabs">
@@ -647,11 +648,35 @@
     if (!isMobile) setTimeout(() => map && map.invalidateSize(), 220);
   }
 
+  let tracesSort = 'desc';
+  let wptSort = 'desc';
+
+  function toggleSort() {
+    if (sidebarTab === 'traces') {
+      tracesSort = tracesSort === 'desc' ? 'asc' : 'desc';
+      renderSidebar();
+    } else {
+      wptSort = wptSort === 'desc' ? 'asc' : 'desc';
+      renderWaypointsSidebar();
+    }
+    document.getElementById('sort-btn').textContent = getCurrentSort() === 'desc' ? '↓ Date' : '↑ Date';
+  }
+
+  function getCurrentSort() {
+    return sidebarTab === 'traces' ? tracesSort : wptSort;
+  }
+
+  function updateSortBtn() {
+    const btn = document.getElementById('sort-btn');
+    if (btn) btn.textContent = getCurrentSort() === 'desc' ? '↓ Date' : '↑ Date';
+  }
+
   function renderSidebar() {
     const list = document.getElementById('traces-list');
     if (!traces.length) { list.innerHTML = '<div style="padding:1rem; font-size:0.8rem; color:#475569;">Aucun tracé</div>'; return; }
     const selectedId = document.getElementById('trace-select').value;
-    list.innerHTML = traces.map(t => {
+    const sorted = [...traces].sort((a, b) => tracesSort === 'desc' ? b.start_time - a.start_time : a.start_time - b.start_time);
+    list.innerHTML = sorted.map(t => {
       const date = new Date(t.start_time * 1000).toLocaleDateString('fr-CH');
       const endDate = t.end_time ? new Date(t.end_time * 1000).toLocaleDateString('fr-CH') : null;
       const color = t.color || '#3b82f6';
@@ -686,6 +711,7 @@
     document.getElementById('tab-waypoints').classList.toggle('active', tab === 'waypoints');
     document.getElementById('traces-list').classList.toggle('hidden', tab !== 'traces');
     document.getElementById('waypoints-list').classList.toggle('hidden', tab !== 'waypoints');
+    updateSortBtn();
     if (tab === 'waypoints') renderWaypointsSidebar();
   }
 
@@ -702,7 +728,13 @@
     const catColorMap = buildCategoryColorMap();
     const groups = new Map();
     wpts.forEach(w => { if (!groups.has(w.node_id)) groups.set(w.node_id, []); groups.get(w.node_id).push(w); });
-    list.innerHTML = [...groups.entries()].map(([cat, items]) => {
+    const sortedGroups = [...groups.entries()].sort((a, b) => {
+      const aMax = Math.max(...a[1].map(w => w.timestamp));
+      const bMax = Math.max(...b[1].map(w => w.timestamp));
+      return wptSort === 'desc' ? bMax - aMax : aMax - bMax;
+    });
+    list.innerHTML = sortedGroups.map(([cat, items]) => {
+      const sortedItems = [...items].sort((a, b) => wptSort === 'desc' ? b.timestamp - a.timestamp : a.timestamp - b.timestamp);
       const color = catColorMap.get(cat) || '#a855f7';
       const fid = cat.replace(/[^a-z0-9]/gi, '_');
       const collapsed = collapsedFolders.has(cat);
@@ -715,7 +747,7 @@
           <span class="wpt-folder-arrow" id="wfa-${fid}" style="transform:rotate(${collapsed?'-90':'0'}deg)">▼</span>
         </div>
         <div class="wpt-folder-items${collapsed?' hidden':''}" id="wfi-${fid}">
-          ${items.map(w => `
+          ${sortedItems.map(w => `
             <div class="wpt-item" onclick="centerOnWaypoint(${w.latitude},${w.longitude})">
               <span class="wpt-dot" style="background:${color}"></span>
               <span class="wpt-name">${escHtml(w.node_name || w.node_id)}</span>
