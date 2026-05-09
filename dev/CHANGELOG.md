@@ -25,6 +25,8 @@
 - Packages : `exifr`, `multer`
 
 ### Modifié
+- Liste déroulante "Dossier / Catégorie" dans le modal d'édition waypoint (catégories existantes + "✏️ Autre dossier…")
+- Section "Dossiers prédéfinis" dans ⚙️ Settings : ajouter/supprimer des dossiers disponibles dans la liste
 - Badge 📷 sur l'icône losange des waypoints ayant des photos
 - Bouton "📷 Photos" dans le popup waypoint → carrousel plein écran (‹ ›, compteur, nom fichier)
 - Route `GET /api/photos/summary` — liste des position_id avec photos
