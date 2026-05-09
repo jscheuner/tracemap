@@ -942,6 +942,7 @@
   function buildWaypointPopup(p, color) {
     return `<div class="popup-title" style="color:${color}">${p.node_name || p.node_id}</div>
       <div class="popup-row">Dossier: <span>${p.node_id}</span></div>
+      <div class="popup-row">Date: <span>${new Date(p.timestamp*1000).toLocaleString('fr-CH')}</span></div>
       ${p.altitude ? `<div class="popup-row">Altitude: <span>${Math.round(p.altitude)} m</span></div>` : ''}
       <div class="popup-row">Pos: <span>${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}</span></div>
       <div style="margin-top:0.5rem; text-align:right;">
