@@ -387,6 +387,18 @@
         </span>
       </label>
     </div>
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:0.75rem 0; border-bottom:1px solid #334155;">
+      <div>
+        <div style="font-size:0.9rem; color:#e2e8f0;">Rayon de correspondance photo</div>
+        <div style="font-size:0.78rem; color:#64748b; margin-top:0.2rem;">Distance max (m) pour lier automatiquement une photo à un waypoint</div>
+      </div>
+      <div style="display:flex; align-items:center; gap:0.4rem; flex-shrink:0;">
+        <input type="number" id="setting-photo-radius" min="10" max="500" step="10"
+          style="width:70px; padding:0.35rem 0.5rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#e2e8f0; font-size:0.9rem; outline:none; text-align:right;"
+          onchange="saveSettings()"/>
+        <span style="font-size:0.8rem; color:#64748b;">m</span>
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeSettingsModal()">Fermer</button>
     </div>
@@ -827,45 +839,50 @@
     const file = input.files[0];
     if (!file) return;
     document.getElementById('photo-import-uploading').style.display = '';
-    const fd = new FormData();
-    fd.append('photo', file);
-    const res = await fetch(`${SECRET_PATH}/api/photos/upload`, { method: 'POST', headers: { 'x-session-token': sessionToken }, body: fd });
-    if (!res.ok) { alert('Erreur lors de l\'envoi.'); return; }
-    const data = await res.json();
-    photoImportTempId = data.tempId;
-    photoImportOriginalName = data.originalName;
+    document.getElementById('photo-import-step1').querySelector('button').disabled = true;
+    try {
+      const fd = new FormData();
+      fd.append('photo', file);
+      const res = await fetch(`${SECRET_PATH}/api/photos/upload`, { method: 'POST', headers: { 'x-session-token': sessionToken }, body: fd });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      photoImportTempId = data.tempId;
+      photoImportOriginalName = data.originalName;
 
-    // Preview
-    const preview = document.getElementById('photo-import-preview');
-    const url = URL.createObjectURL(file);
-    preview.innerHTML = `<img src="${url}" style="max-width:100%; max-height:160px; border-radius:6px; border:1px solid #334155;"/>`;
+      // Match automatique dans le rayon → lier et fermer
+      if (data.candidates && data.candidates.length > 0) {
+        const best = data.candidates[0];
+        await fetch(`${SECRET_PATH}/api/photos/confirm`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-session-token': sessionToken },
+          body: JSON.stringify({ tempId: data.tempId, position_id: best.id, original_name: data.originalName })
+        });
+        closePhotoImportModal();
+        alert(`📷 Photo liée automatiquement à "${best.node_name}" (${best.dist} m)`);
+        return;
+      }
 
-    // GPS info
-    const gpsInfo = document.getElementById('photo-import-gps-info');
-    const matchInfo = document.getElementById('photo-import-match-info');
-    if (data.gps) {
-      gpsInfo.textContent = `📍 GPS: ${data.gps.lat.toFixed(5)}, ${data.gps.lon.toFixed(5)}`;
-    } else {
-      gpsInfo.textContent = 'Aucune position GPS dans la photo.';
+      // Pas de match → afficher picker manuel
+      const preview = document.getElementById('photo-import-preview');
+      preview.innerHTML = `<img src="${URL.createObjectURL(file)}" style="max-width:100%; max-height:160px; border-radius:6px; border:1px solid #334155;"/>`;
+      const gpsInfo = document.getElementById('photo-import-gps-info');
+      gpsInfo.textContent = data.gps
+        ? `📍 GPS trouvé (${data.gps.lat.toFixed(5)}, ${data.gps.lon.toFixed(5)}) — aucun waypoint dans le rayon.`
+        : 'Aucune position GPS dans cette photo.';
+      document.getElementById('photo-import-match-info').style.display = 'none';
+      const wpts = positions.filter(p => p.source === 'gpx_waypoint');
+      const sel = document.getElementById('photo-import-wpt-select');
+      sel.innerHTML = wpts.length
+        ? wpts.map(w => `<option value="${w.id}">${w.node_name || w.node_id} (${w.node_id})</option>`).join('')
+        : '<option value="">Aucun waypoint disponible</option>';
+      document.getElementById('photo-import-uploading').style.display = 'none';
+      document.getElementById('photo-import-step1').style.display = 'none';
+      document.getElementById('photo-import-step2').style.display = '';
+    } catch(e) {
+      document.getElementById('photo-import-uploading').style.display = 'none';
+      document.getElementById('photo-import-step1').querySelector('button').disabled = false;
+      alert('Erreur lors de l\'analyse : ' + e.message);
     }
-
-    // Dropdown de tous les waypoints
-    const wpts = positions.filter(p => p.source === 'gpx_waypoint');
-    const sel = document.getElementById('photo-import-wpt-select');
-    sel.innerHTML = wpts.map(w => `<option value="${w.id}">${w.node_name || w.node_id} (${w.node_id})</option>`).join('');
-
-    // Pré-sélectionner le meilleur candidat
-    if (data.candidates && data.candidates.length > 0) {
-      sel.value = data.candidates[0].id;
-      matchInfo.textContent = `✓ Waypoint proche trouvé : "${data.candidates[0].node_name}" à ${data.candidates[0].dist} m`;
-      matchInfo.style.display = '';
-    } else {
-      matchInfo.style.display = 'none';
-    }
-
-    document.getElementById('photo-import-uploading').style.display = 'none';
-    document.getElementById('photo-import-step1').style.display = 'none';
-    document.getElementById('photo-import-step2').style.display = '';
   }
 
   async function confirmPhotoImport() {
@@ -1429,6 +1446,7 @@
         const checked = s.autoRollover === 'true';
         document.getElementById('setting-auto-rollover').checked = checked;
         updateToggleStyle(checked);
+        document.getElementById('setting-photo-radius').value = s.photoMatchRadius || 50;
       }
     } catch(e) {}
     document.getElementById('settings-modal').classList.remove('hidden');
@@ -1449,10 +1467,11 @@
   async function saveSettings() {
     const checked = document.getElementById('setting-auto-rollover').checked;
     updateToggleStyle(checked);
+    const radius = parseInt(document.getElementById('setting-photo-radius').value) || 50;
     await fetch(`${SECRET_PATH}/api/settings`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'x-session-token': sessionToken },
-      body: JSON.stringify({ autoRollover: checked }),
+      body: JSON.stringify({ autoRollover: checked, photoMatchRadius: radius }),
     });
   }
 

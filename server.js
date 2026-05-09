@@ -94,6 +94,7 @@ db.exec(`CREATE TABLE IF NOT EXISTS photos (
   created_at INTEGER DEFAULT (strftime('%s','now'))
 );`);
 db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run('autoRollover', 'true');
+db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run('photoMatchRadius', '50');
 
 function getSetting(key) {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
@@ -524,8 +525,9 @@ app.get(`/${CONFIG.secretPath}/api/settings`, (req, res) => {
 
 app.put(`/${CONFIG.secretPath}/api/settings`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
-  const { autoRollover } = req.body;
+  const { autoRollover, photoMatchRadius } = req.body;
   if (autoRollover !== undefined) setSetting('autoRollover', autoRollover ? 'true' : 'false');
+  if (photoMatchRadius !== undefined) setSetting('photoMatchRadius', String(parseInt(photoMatchRadius) || 50));
   res.json({ success: true });
 });
 
@@ -601,7 +603,8 @@ app.post(`/${CONFIG.secretPath}/api/photos/upload`, uploadTmp.single('photo'), a
 
   let gps = null;
   try {
-    const exif = await exifr.gps(file.path);
+    const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000));
+    const exif = await Promise.race([exifr.gps(file.path), timeout]);
     if (exif && exif.latitude != null && exif.longitude != null) gps = { lat: exif.latitude, lon: exif.longitude };
   } catch (e) {}
 
@@ -624,7 +627,7 @@ app.post(`/${CONFIG.secretPath}/api/photos/upload`, uploadTmp.single('photo'), a
     return res.json({ id: result.lastInsertRowid, filepath: db.prepare('SELECT filepath FROM photos WHERE id = ?').get(result.lastInsertRowid).filepath, gps });
   }
 
-  const radius = parseInt(req.query.radius) || 50;
+  const radius = parseInt(getSetting('photoMatchRadius')) || 50;
   let candidates = [];
   if (gps) {
     candidates = db.prepare("SELECT * FROM positions WHERE source = 'gpx_waypoint'").all()
