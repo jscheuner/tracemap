@@ -22,7 +22,8 @@
 - [x] Edition et suppression de waypoints individuels
 - [x] Suppression d'un dossier complet (avec confirmation mot de passe)
 - [x] Photos sur les waypoints : ajout depuis le modal d'édition
-- [x] Import photo avec extraction GPS EXIF et matching automatique ≤ 50 m
+- [x] Import photo avec extraction GPS EXIF — liaison automatique si match dans le rayon configuré, sinon picker manuel
+- [x] Rayon de correspondance photo configurable dans ⚙️ (défaut 50 m)
 
 ### Interface admin
 - [x] Sidebar avec onglets Tracés / Points GPS

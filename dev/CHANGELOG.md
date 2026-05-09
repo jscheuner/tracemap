@@ -18,8 +18,10 @@
 - Bouton suppression dossier waypoints complet (avec confirmation mot de passe)
 - **Photos sur les waypoints** : upload, stockage fichier (`data/photos/{dossier}/`), table `photos` en DB
   - Section photos dans le modal d'édition (miniatures + ajouter + supprimer)
-  - Import photo standalone avec extraction GPS EXIF et matching waypoint ≤ 50 m
+  - Import photo avec extraction GPS EXIF — liaison automatique si waypoint dans le rayon, sinon picker manuel
   - Bouton "📷 Photo" dans le toolbar
+  - Paramètre `photoMatchRadius` (défaut 50 m) dans ⚙️ Paramètres
+  - Timeout 8 s sur l'extraction EXIF pour éviter les blocages
 - Packages : `exifr`, `multer`
 
 ### Modifié
