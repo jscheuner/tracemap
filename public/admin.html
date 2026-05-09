@@ -1042,6 +1042,13 @@
   function closeCarousel() { document.getElementById('carousel-modal').classList.add('hidden'); }
   function closeCarouselOutside(e) { if (e.target === document.getElementById('carousel-modal')) closeCarousel(); }
 
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('carousel-modal').addEventListener('wheel', e => {
+      e.preventDefault();
+      if (e.deltaY > 0) carouselNext(); else carouselPrev();
+    }, { passive: false });
+  });
+
   async function confirmPhotoImport() {
     const positionId = document.getElementById('photo-import-wpt-select').value;
     if (!positionId || !photoImportTempId) return;
@@ -1373,11 +1380,11 @@
       const color = catColorMap.get(p.node_id) || '#a855f7';
       const hasPhotos = wptPhotoIds.has(p.id);
       const icon = L.divIcon({
-        html: `<div style="position:relative;width:18px;height:18px;">
-          <div style="background:${color};width:11px;height:11px;border-radius:2px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.5);transform:rotate(45deg);position:absolute;top:3px;left:3px;"></div>
-          ${hasPhotos ? '<div style="position:absolute;top:-3px;right:-3px;background:#f59e0b;border-radius:50%;width:9px;height:9px;font-size:6px;display:flex;align-items:center;justify-content:center;line-height:1;border:1px solid #fff;">📷</div>' : ''}
+        html: `<div style="position:relative;width:26px;height:26px;">
+          <div style="background:${color};width:11px;height:11px;border-radius:2px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.5);transform:rotate(45deg);position:absolute;top:7px;left:7px;"></div>
+          ${hasPhotos ? '<div style="position:absolute;top:-2px;right:-2px;background:#f59e0b;border-radius:50%;width:18px;height:18px;font-size:12px;display:flex;align-items:center;justify-content:center;line-height:1;border:1.5px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4);">📷</div>' : ''}
         </div>`,
-        iconSize: [18, 18], iconAnchor: [9, 9]
+        iconSize: [26, 26], iconAnchor: [13, 13]
       });
       markers.push(L.marker([p.latitude,p.longitude],{icon}).addTo(map).bindPopup(buildWaypointPopup(p, color, hasPhotos)));
     });
