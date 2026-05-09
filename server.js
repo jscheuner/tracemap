@@ -604,13 +604,20 @@ app.post(`/${CONFIG.secretPath}/api/photos/upload`, uploadTmp.single('photo'), a
   const position_id = req.body.position_id ? parseInt(req.body.position_id) : null;
 
   let gps = null;
-  try {
-    const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000));
-    const exif = await Promise.race([exifr.gps(file.path), timeout]);
-    if (exif && typeof exif.latitude === 'number' && typeof exif.longitude === 'number' && isFinite(exif.latitude) && isFinite(exif.longitude)) {
-      gps = { lat: exif.latitude, lon: exif.longitude };
-    }
-  } catch (e) {}
+  // Coordonnées envoyées par le client (mobile : navigateur stripe l'EXIF à l'upload)
+  const clientLat = req.body.gps_lat ? parseFloat(req.body.gps_lat) : null;
+  const clientLon = req.body.gps_lon ? parseFloat(req.body.gps_lon) : null;
+  if (clientLat && clientLon && isFinite(clientLat) && isFinite(clientLon)) {
+    gps = { lat: clientLat, lon: clientLon };
+  } else {
+    try {
+      const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000));
+      const exif = await Promise.race([exifr.gps(file.path), timeout]);
+      if (exif && typeof exif.latitude === 'number' && typeof exif.longitude === 'number' && isFinite(exif.latitude) && isFinite(exif.longitude)) {
+        gps = { lat: exif.latitude, lon: exif.longitude };
+      }
+    } catch (e) {}
+  }
 
   const ext = path.extname(file.originalname || '').toLowerCase() || '.jpg';
 
