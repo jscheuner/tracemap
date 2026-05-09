@@ -717,6 +717,7 @@
 
   // ── Sidebar waypoints ────────────────────────────────────────
   const collapsedFolders = new Set();
+  let wptFoldersInitialized = false;
 
   function renderWaypointsSidebar() {
     const list = document.getElementById('waypoints-list');
@@ -728,6 +729,10 @@
     const catColorMap = buildCategoryColorMap();
     const groups = new Map();
     wpts.forEach(w => { if (!groups.has(w.node_id)) groups.set(w.node_id, []); groups.get(w.node_id).push(w); });
+    if (!wptFoldersInitialized) {
+      groups.forEach((_, cat) => collapsedFolders.add(cat));
+      wptFoldersInitialized = true;
+    }
     const sortedGroups = [...groups.entries()].sort((a, b) => {
       const aMax = Math.max(...a[1].map(w => w.timestamp));
       const bMax = Math.max(...b[1].map(w => w.timestamp));
