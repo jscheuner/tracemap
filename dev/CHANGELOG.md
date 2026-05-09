@@ -25,6 +25,9 @@
 - Packages : `exifr`, `multer`
 
 ### Modifié
+- Badge 📷 sur l'icône losange des waypoints ayant des photos
+- Bouton "📷 Photos" dans le popup waypoint → carrousel plein écran (‹ ›, compteur, nom fichier)
+- Route `GET /api/photos/summary` — liste des position_id avec photos
 - Bouton "↓ Date / ↑ Date" dans le header sidebar — tri croissant/décroissant pour les tracés (par start_time) et les waypoints (par timestamp, dossiers et items)
 - Interface responsive mobile (breakpoint 680px) : sidebar overlay avec backdrop, toolbar scroll horizontal, header compact, filter bar scroll, modals adaptés
 - Bouton info (ⓘ) fusionné dans le crayon (✏️) → ouvre modal détails
