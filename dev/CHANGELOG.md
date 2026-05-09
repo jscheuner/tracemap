@@ -25,6 +25,7 @@
 - Packages : `exifr`, `multer`
 
 ### Modifié
+- Bouton "↓ Date / ↑ Date" dans le header sidebar — tri croissant/décroissant pour les tracés (par start_time) et les waypoints (par timestamp, dossiers et items)
 - Interface responsive mobile (breakpoint 680px) : sidebar overlay avec backdrop, toolbar scroll horizontal, header compact, filter bar scroll, modals adaptés
 - Bouton info (ⓘ) fusionné dans le crayon (✏️) → ouvre modal détails
 - `GET /api/positions` : inclut toujours les `gpx_waypoint` quelle que soit la fenêtre temporelle
