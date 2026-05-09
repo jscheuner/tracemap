@@ -1134,6 +1134,12 @@
       e.preventDefault();
       if (e.deltaY > 0) carouselNext(); else carouselPrev();
     }, { passive: false });
+    document.addEventListener('keydown', e => {
+      if (document.getElementById('carousel-modal').classList.contains('hidden')) return;
+      if (e.key === 'Escape') closeCarousel();
+      else if (e.key === 'ArrowRight') carouselNext();
+      else if (e.key === 'ArrowLeft') carouselPrev();
+    });
   });
 
   async function confirmPhotoImport() {
