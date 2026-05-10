@@ -451,14 +451,18 @@ app.post(`/${CONFIG.secretPath}/login`, (req, res) => {
 
 app.get(`/${CONFIG.secretPath}/api/positions`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
-  const { hours = 24, node_id, trace_id } = req.query;
+  const { hours, from, to, node_id, trace_id } = req.query;
   let query, params;
   if (trace_id) {
     query = 'SELECT * FROM positions WHERE trace_id = ?';
     params = [parseInt(trace_id)];
     if (node_id) { query += ' AND node_id = ?'; params.push(node_id); }
+  } else if (from && to) {
+    query = "SELECT * FROM positions WHERE (timestamp BETWEEN ? AND ? OR source = 'gpx_waypoint')";
+    params = [parseInt(from), parseInt(to)];
+    if (node_id) { query += ' AND node_id = ?'; params.push(node_id); }
   } else {
-    const since = Math.floor(Date.now() / 1000) - parseInt(hours) * 3600;
+    const since = Math.floor(Date.now() / 1000) - parseInt(hours || 168) * 3600;
     query = "SELECT * FROM positions WHERE (timestamp > ? OR source = 'gpx_waypoint')";
     params = [since];
     if (node_id) { query += ' AND node_id = ?'; params.push(node_id); }

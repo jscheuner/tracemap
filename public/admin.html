@@ -10,6 +10,9 @@
   <script src="https://cdn.jsdelivr.net/npm/exifr/dist/lite.umd.cjs"></script>
   <link rel="stylesheet" href="https://cdn.quilljs.com/1.3.7/quill.snow.css"/>
   <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/fr.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
@@ -570,13 +573,7 @@
       <!-- Zone 2 : période + refresh -->
       <div class="ctrl-group">
         <label>Période :</label>
-        <select id="hours-select" onchange="loadPositions()">
-          <option value="6">6h</option>
-          <option value="24" selected>24h</option>
-          <option value="48">2j</option>
-          <option value="168">7j</option>
-          <option value="720">30j</option>
-        </select>
+        <input id="date-range-input" readonly placeholder="Date début → Date fin" style="background:#0f172a; border:1px solid #334155; border-radius:6px; color:#e2e8f0; padding:0.3rem 0.6rem; font-size:0.82rem; cursor:pointer; width:210px; outline:none;"/>
         <button class="btn btn-primary btn-icon" onclick="loadPositions()" title="Actualiser">↺</button>
         <label class="auto-label">
           <input type="checkbox" id="auto-refresh" checked onchange="toggleAutoRefresh()"/> Auto
@@ -683,7 +680,7 @@
     document.getElementById('header').classList.remove('hidden');
     document.getElementById('app-body').classList.remove('hidden');
     if (window.innerWidth <= 680) document.getElementById('sidebar').classList.add('collapsed');
-    initMap(); loadTraces(); loadPositions(); loadPhotoSummary(); startAutoRefresh();
+    initMap(); initDateRangePicker(); loadTraces(); loadPositions(); loadPhotoSummary(); startAutoRefresh();
   }
 
   async function checkSession() {
@@ -1280,7 +1277,8 @@
 
   function selectTrace(id) {
     document.getElementById('trace-select').value = id;
-    document.getElementById('hours-select').disabled = true;
+    if (dateRangePicker) dateRangePicker.set('clickOpens', false);
+    document.getElementById('date-range-input').disabled = true;
     loadPositions();
     renderSidebar();
   }
@@ -1367,7 +1365,9 @@
   }
 
   function onTraceChange() {
-    document.getElementById('hours-select').disabled = !!document.getElementById('trace-select').value;
+    const hasTrace = !!document.getElementById('trace-select').value;
+    document.getElementById('date-range-input').disabled = hasTrace;
+    if (dateRangePicker) dateRangePicker.set('clickOpens', !hasTrace);
     loadPositions();
     renderSidebar();
   }
@@ -1524,10 +1524,52 @@
   }
 
   // ── Positions ────────────────────────────────────────────────
+  let dateRangePicker = null;
+  let dateRangeFrom = null;
+  let dateRangeTo = null;
+
+  function initDateRangePicker() {
+    const today = new Date();
+    const weekAgo = new Date(today); weekAgo.setDate(today.getDate() - 7);
+    dateRangeFrom = weekAgo;
+    dateRangeTo = today;
+    dateRangePicker = flatpickr('#date-range-input', {
+      mode: 'range',
+      locale: 'fr',
+      dateFormat: 'd.m.Y',
+      defaultDate: [weekAgo, today],
+      maxDate: 'today',
+      onChange: function(selectedDates) {
+        if (selectedDates.length === 2) {
+          const [from, to] = selectedDates;
+          if (to < from) {
+            alert('La date de fin doit être après la date de début.');
+            dateRangePicker.setDate([from, from]);
+            return;
+          }
+          dateRangeFrom = from;
+          dateRangeTo = to;
+          loadPositions();
+        } else if (selectedDates.length === 1) {
+          dateRangeFrom = selectedDates[0];
+          dateRangeTo = null;
+        }
+      }
+    });
+  }
+
   async function loadPositions() {
     const traceId = document.getElementById('trace-select').value;
-    const hours = document.getElementById('hours-select').value;
-    const url = traceId ? `${SECRET_PATH}/api/positions?trace_id=${traceId}` : `${SECRET_PATH}/api/positions?hours=${hours}`;
+    let url;
+    if (traceId) {
+      url = `${SECRET_PATH}/api/positions?trace_id=${traceId}`;
+    } else if (dateRangeFrom && dateRangeTo) {
+      const from = Math.floor(dateRangeFrom.getTime() / 1000);
+      const toTs = Math.floor(new Date(dateRangeTo).setHours(23, 59, 59, 999) / 1000);
+      url = `${SECRET_PATH}/api/positions?from=${from}&to=${toTs}`;
+    } else {
+      url = `${SECRET_PATH}/api/positions?from=${Math.floor(Date.now()/1000) - 7*86400}&to=${Math.floor(Date.now()/1000)}`;
+    }
     try {
       const res = await fetch(url, { headers: { 'x-session-token': sessionToken } });
       if (res.status === 401) { localStorage.removeItem('mesh_session'); location.reload(); return; }
@@ -1820,7 +1862,8 @@
       // Réinitialiser la vue si le tracé supprimé était sélectionné
       if (String(document.getElementById('trace-select').value) === String(deleteTargetId)) {
         document.getElementById('trace-select').value = '';
-        document.getElementById('hours-select').disabled = false;
+        document.getElementById('date-range-input').disabled = false;
+        if (dateRangePicker) dateRangePicker.set('clickOpens', true);
       }
       closeDeleteModal();
       await loadTraces();

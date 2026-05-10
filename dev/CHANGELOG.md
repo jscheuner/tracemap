@@ -3,6 +3,10 @@
 ## [En cours]
 
 ### Ajouté
+- **Sélecteur de période** en date range picker (Flatpickr) : un calendrier, premier clic = date début, deuxième clic = date fin — remplace le select 6h/24h/…
+  - Validation : date de fin toujours ≥ date de début
+  - Désactivé automatiquement quand un tracé est sélectionné
+  - Serveur : nouvelle query `?from=TIMESTAMP&to=TIMESTAMP`
 - Champ **Description** riche sur les waypoints (Quill.js) : gras, italique, souligné, couleur de texte, police, taille
   - Stocké en HTML dans la colonne `description` de la table `positions`
   - Affiché (rendu HTML) dans la popup du waypoint sur la carte
