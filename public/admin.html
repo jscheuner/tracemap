@@ -455,11 +455,9 @@
 
     <label style="display:block; margin-bottom:0.4rem;">Photos</label>
     <div id="wpt-photos-grid" class="photo-grid">
-      <button class="photo-add-btn" onclick="triggerPhotoUpload()" title="Ajouter une photo">＋</button>
+      <button class="photo-add-btn" onclick="triggerPhotoUpload()" title="Ajouter des photos">＋</button>
     </div>
-    <input type="file" id="wpt-photo-input" accept="image/*" style="display:none" onchange="handlePhotoFileSelected(this)"/>
-    <input type="file" id="wpt-photo-bulk-input" accept="image/*" multiple style="display:none" onchange="handleWptPhotoBulk(this)"/>
-    <button class="btn btn-ghost" style="width:100%; margin-top:0.4rem; font-size:0.82rem; padding:0.4rem;" onclick="document.getElementById('wpt-photo-bulk-input').click()">📁 Importer plusieurs photos</button>
+    <input type="file" id="wpt-photo-input" accept="image/*" multiple style="display:none" onchange="handleWptPhotoBulk(this)"/>
     <div id="wpt-bulk-status" style="display:none; font-size:0.8rem; color:#94a3b8; margin-top:0.4rem;"></div>
 
     <div class="modal-actions" style="justify-content:space-between; position:sticky; bottom:-2rem; margin:-1px -2rem -2rem; background:#1e293b; padding:0.75rem 2rem 1.5rem; border-top:1px solid #334155; margin-top:1rem;">
@@ -941,6 +939,7 @@
     const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     document.getElementById('wpt-edit-date').value = local;
     document.getElementById('wpt-photos-grid').innerHTML = `<button class="photo-add-btn" onclick="triggerPhotoUpload()">＋</button>`;
+    document.getElementById('wpt-bulk-status').style.display = 'none';
     initWptDescEditor();
     if (w.description) {
       wptDescEditor.root.innerHTML = w.description;
