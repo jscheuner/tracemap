@@ -3,6 +3,11 @@
 ## [En cours]
 
 ### Ajouté
+- **Traccar Client** : remplace le phone-tracker navigateur
+  - Endpoint `GET /api/traccar?id=&lat=&lon=&timestamp=&altitude=&speed=&accuracy=&batt=`
+  - Lie les positions au tracé actif, source `phone_gps`
+  - URL de configuration affichée + bouton Copier dans ⚙️ Paramètres
+  - Suppression de `phone-tracker.html`
 - **Sélecteur de période** en date range picker (Flatpickr) : un calendrier, premier clic = date début, deuxième clic = date fin — remplace le select 6h/24h/…
   - Validation : date de fin toujours ≥ date de début
   - Désactivé automatiquement quand un tracé est sélectionné

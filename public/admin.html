@@ -514,6 +514,16 @@
         <button class="btn btn-primary" onclick="addSettingsCategory()" style="padding:0.4rem 0.75rem;">Ajouter</button>
       </div>
     </div>
+    <div style="padding:0.75rem 0; border-top:1px solid #334155;">
+      <div style="font-size:0.9rem; color:#e2e8f0; margin-bottom:0.35rem;">Traccar Client</div>
+      <div style="font-size:0.78rem; color:#64748b; margin-bottom:0.6rem;">URL à copier dans l'app Traccar Client (Android/iOS)</div>
+      <div style="display:flex; gap:0.5rem; align-items:center;">
+        <input id="traccar-url-display" readonly
+          style="flex:1; padding:0.45rem 0.65rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#94a3b8; font-size:0.75rem; outline:none; font-family:monospace;"/>
+        <button class="btn btn-ghost" style="padding:0.4rem 0.75rem; flex-shrink:0;" onclick="copyTraccarUrl()">Copier</button>
+      </div>
+      <div style="font-size:0.75rem; color:#475569; margin-top:0.4rem;">Dans Traccar Client : coller cette URL dans <em>Server URL</em>, laisser le port vide, fréquence 30s.</div>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeSettingsModal()">Fermer</button>
     </div>
@@ -1879,7 +1889,19 @@
         renderSettingsCategoriesList();
       }
     } catch(e) {}
+    const traccarUrl = `${window.location.origin}${SECRET_PATH}/api/traccar`;
+    document.getElementById('traccar-url-display').value = traccarUrl;
     document.getElementById('settings-modal').classList.remove('hidden');
+  }
+
+  function copyTraccarUrl() {
+    const input = document.getElementById('traccar-url-display');
+    navigator.clipboard.writeText(input.value).then(() => {
+      const btn = input.nextElementSibling;
+      const orig = btn.textContent;
+      btn.textContent = '✓ Copié';
+      setTimeout(() => btn.textContent = orig, 2000);
+    });
   }
 
   function closeSettingsModal() {

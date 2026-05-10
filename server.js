@@ -595,6 +595,37 @@ app.post(`/${CONFIG.secretPath}/api/positions/ingest`, (req, res) => {
   res.json({ success: true, ...insertMany(points) });
 });
 
+// ── Traccar Client ───────────────────────────────────────────
+app.get(`/${CONFIG.secretPath}/api/traccar`, (req, res) => {
+  const { id, lat, lon, timestamp, altitude, speed, bearing, accuracy, hdop, batt } = req.query;
+  const latitude = parseFloat(lat);
+  const longitude = parseFloat(lon);
+  if (!lat || !lon || isNaN(latitude) || isNaN(longitude)) return res.status(400).send('Missing or invalid lat/lon');
+
+  let ts;
+  if (timestamp) {
+    const n = parseFloat(timestamp);
+    ts = isNaN(n) ? Math.floor(new Date(timestamp).getTime() / 1000) : (n > 1e10 ? Math.floor(n / 1000) : Math.floor(n));
+  } else {
+    ts = Math.floor(Date.now() / 1000);
+  }
+
+  const traceId = getCurrentTrace()?.id || ensureActiveTrace().id;
+  const deviceId = (id || 'traccar').substring(0, 64);
+  const acc = accuracy || hdop;
+
+  db.prepare(`INSERT INTO positions (node_id, node_name, latitude, longitude, altitude, speed, battery, timestamp, trace_id, source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'phone_gps')`).run(
+    deviceId, deviceId,
+    latitude, longitude,
+    altitude != null ? parseFloat(altitude) : null,
+    speed != null ? parseFloat(speed) : null,
+    batt != null ? parseInt(batt) : null,
+    ts, traceId
+  );
+  res.status(200).send('OK');
+});
+
 // ── Photos ───────────────────────────────────────────────────
 
 app.get(`/${CONFIG.secretPath}/photos/*`, (req, res) => {
@@ -701,9 +732,6 @@ app.get('/tracker-app.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'tracker-app.html'));
 });
 
-app.get('/phone-tracker.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'phone-tracker.html'));
-});
 
 app.get(`/${CONFIG.secretPath}`, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
