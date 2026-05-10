@@ -1529,15 +1529,10 @@
   let dateRangeTo = null;
 
   function initDateRangePicker() {
-    const today = new Date();
-    const weekAgo = new Date(today); weekAgo.setDate(today.getDate() - 7);
-    dateRangeFrom = weekAgo;
-    dateRangeTo = today;
     dateRangePicker = flatpickr('#date-range-input', {
       mode: 'range',
       locale: 'fr',
       dateFormat: 'd.m.Y',
-      defaultDate: [weekAgo, today],
       maxDate: 'today',
       onChange: function(selectedDates) {
         if (selectedDates.length === 2) {
