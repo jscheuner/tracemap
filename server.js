@@ -164,17 +164,18 @@ if (!getSetting('traccarToken')) {
   setSetting('traccarToken', crypto.randomBytes(16).toString('hex'));
 }
 
-const sessions = new Map();
-function createSession() {
-  const token = crypto.randomBytes(32).toString('hex');
-  sessions.set(token, { createdAt: Date.now() });
-  setTimeout(() => sessions.delete(token), 24 * 60 * 60 * 1000);
-  return token;
+// Si aucun token en DB → génère un token bootstrap affiché dans les logs
+if (!db.prepare('SELECT id FROM tokens LIMIT 1').get()) {
+  const bootstrapToken = crypto.randomBytes(32).toString('hex');
+  db.prepare('INSERT INTO tokens (token, label) VALUES (?, ?)').run(bootstrapToken, 'Bootstrap');
+  console.log('\n⚠️  Aucun token trouvé — token bootstrap généré :');
+  console.log(`   ${bootstrapToken}`);
+  console.log('   Accédez à /admin?token=<ci-dessus> pour créer vos tokens depuis les Paramètres.\n');
 }
+
 function isAuthenticated(req) {
   const token = req.headers['x-session-token'] || req.query.token;
   if (!token) return false;
-  if (sessions.has(token)) return true;
   return !!db.prepare('SELECT id FROM tokens WHERE token = ?').get(token);
 }
 
@@ -456,9 +457,10 @@ mqttClient.on('error', (err) => console.error('❌ MQTT:', err.message));
 mqttClient.on('reconnect', () => console.log('🔄 Reconnexion MQTT...'));
 
 app.post(`/login`, (req, res) => {
+  // Vérification mot de passe uniquement pour les confirmations de suppression
   const { password } = req.body;
   if (password === CONFIG.webPassword) {
-    res.json({ success: true, token: createSession() });
+    res.json({ success: true });
   } else {
     res.status(401).json({ success: false, message: 'Mot de passe incorrect' });
   }

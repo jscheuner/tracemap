@@ -253,10 +253,10 @@
 <div id="login-screen">
   <div class="login-card">
     <h1>Admin — TraceMap</h1>
-    <p>Accès administrateur</p>
-    <input type="password" id="password-input" placeholder="Mot de passe" onkeydown="if(event.key==='Enter')login()"/>
-    <button onclick="login()">Accéder</button>
-    <div class="login-error" id="login-error">Mot de passe incorrect</div>
+    <p>Collez votre token d'accès ou scannez le QR code depuis un appareil autorisé.</p>
+    <input type="text" id="token-input" placeholder="Token d'accès" onkeydown="if(event.key==='Enter')loginWithToken()" style="font-family:monospace; font-size:0.8rem;"/>
+    <button onclick="loginWithToken()">Accéder</button>
+    <div class="login-error" id="login-error">Token invalide</div>
   </div>
 </div>
 
@@ -728,12 +728,17 @@
     }
   })();
 
-  async function login() {
-    const pw = document.getElementById('password-input').value;
-    const res = await fetch(`/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw }) });
-    const data = await res.json();
-    if (data.success) { sessionToken = data.token; localStorage.setItem('mesh_session', sessionToken); showApp(); }
-    else document.getElementById('login-error').style.display = 'block';
+  async function loginWithToken() {
+    const token = document.getElementById('token-input').value.trim();
+    if (!token) return;
+    const res = await fetch(`/api/last`, { headers: { 'x-session-token': token } });
+    if (res.ok) {
+      sessionToken = token;
+      localStorage.setItem('mesh_session', sessionToken);
+      showApp();
+    } else {
+      document.getElementById('login-error').style.display = 'block';
+    }
   }
 
   function showApp() {
@@ -746,7 +751,7 @@
 
   async function checkSession() {
     if (!sessionToken) return;
-    try { const res = await fetch(`/api/last?token=${sessionToken}`); if (res.ok) showApp(); } catch {}
+    try { const res = await fetch(`/api/last`, { headers: { 'x-session-token': sessionToken } }); if (res.ok) showApp(); } catch {}
   }
 
   // ── Sidebar ──────────────────────────────────────────────────
