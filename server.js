@@ -599,8 +599,7 @@ app.post(`/${CONFIG.secretPath}/api/positions/ingest`, (req, res) => {
 // ── Traccar Client ───────────────────────────────────────────
 app.all(`/${CONFIG.secretPath}/api/traccar`, (req, res) => {
   const p = { ...req.query, ...req.body };
-
-  // Format imbriqué (Background Geolocation / transistorsoft)
+  // Supporte le format flat (query params) ET le format imbriqué (Background Geolocation / transistorsoft)
   let lat = p.lat, lon = p.lon, timestamp = p.timestamp;
   let altitude = p.altitude, speed = p.speed, accuracy = p.accuracy || p.hdop;
   let batt = p.batt;
