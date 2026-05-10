@@ -20,6 +20,7 @@
 
 ### Waypoints / POI
 - [x] Edition et suppression de waypoints individuels
+- [x] Description riche par waypoint (Quill.js : gras, couleur, police, taille) — rendu HTML dans le popup carte
 - [x] Suppression d'un dossier complet (avec confirmation mot de passe)
 - [x] Photos sur les waypoints : ajout depuis le modal d'édition
 - [x] Import photo avec extraction GPS EXIF — liaison automatique si match dans le rayon configuré, sinon picker manuel

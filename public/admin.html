@@ -8,6 +8,8 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exifr/dist/lite.umd.cjs"></script>
+  <link rel="stylesheet" href="https://cdn.quilljs.com/1.3.7/quill.snow.css"/>
+  <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
@@ -136,6 +138,22 @@
     .modal-box input[type=date] { width: 100%; padding: 0.6rem 0.75rem; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0; font-size: 0.9rem; outline: none; margin-bottom: 0.75rem; }
     .modal-box input[type=date]:focus { border-color: #3b82f6; }
     .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.25rem; }
+
+    /* ── Quill dark theme ── */
+    .ql-toolbar.ql-snow { background: #0f172a; border: 1px solid #334155; border-radius: 8px 8px 0 0; }
+    .ql-container.ql-snow { background: #0f172a; border: 1px solid #334155; border-top: none; border-radius: 0 0 8px 8px; min-height: 90px; }
+    .ql-editor { color: #e2e8f0; font-size: 0.9rem; min-height: 90px; }
+    .ql-editor.ql-blank::before { color: #475569; font-style: normal; }
+    .ql-snow .ql-stroke { stroke: #94a3b8; }
+    .ql-snow .ql-fill { fill: #94a3b8; }
+    .ql-snow .ql-picker { color: #94a3b8; }
+    .ql-snow .ql-picker-options { background: #1e293b; border: 1px solid #334155; border-radius: 6px; }
+    .ql-snow .ql-picker-item { color: #e2e8f0; }
+    .ql-snow .ql-picker-item:hover { color: #3b82f6; }
+    .ql-snow .ql-active .ql-stroke, .ql-snow button:hover .ql-stroke { stroke: #3b82f6; }
+    .ql-snow .ql-active .ql-fill, .ql-snow button:hover .ql-fill { fill: #3b82f6; }
+    .ql-snow .ql-color-picker .ql-picker-options { width: 152px; padding: 4px; }
+    #wpt-desc-wrapper { margin-bottom: 0.75rem; }
     .gpx-preview { background: #0f172a; border-radius: 8px; padding: 0.75rem; margin: 0.5rem 0; font-size: 0.8rem; color: #64748b; min-height: 48px; }
     .gpx-preview strong { color: #e2e8f0; }
 
@@ -394,6 +412,11 @@
 
     <label>Nom</label>
     <input type="text" id="wpt-edit-name" placeholder="Nom du point"/>
+
+    <label style="margin-top:0.75rem; display:block;">Description</label>
+    <div id="wpt-desc-wrapper">
+      <div id="wpt-desc-editor"></div>
+    </div>
 
     <label style="margin-top:0.75rem; display:block;">Dossier / Catégorie</label>
     <select id="wpt-edit-category-select" style="margin-top:0.4rem; width:100%; padding:0.6rem 0.75rem; background:#0f172a; border:1px solid #334155; border-radius:8px; color:#e2e8f0; font-size:0.9rem; outline:none;" onchange="onCategorySelectChange()"></select>
@@ -897,6 +920,12 @@
     const local = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     document.getElementById('wpt-edit-date').value = local;
     document.getElementById('wpt-photos-grid').innerHTML = `<button class="photo-add-btn" onclick="triggerPhotoUpload()">＋</button>`;
+    initWptDescEditor();
+    if (w.description) {
+      wptDescEditor.root.innerHTML = w.description;
+    } else {
+      wptDescEditor.setText('');
+    }
     document.getElementById('wpt-edit-modal').classList.remove('hidden');
     setTimeout(() => document.getElementById('wpt-edit-name').select(), 50);
     loadWaypointPhotos(id).then(photos => renderWaypointPhotos(photos, id));
@@ -910,11 +939,14 @@
     const altVal = document.getElementById('wpt-edit-alt').value;
     const dateVal = document.getElementById('wpt-edit-date').value;
     if (!name) return;
+    const descHtml = wptDescEditor ? wptDescEditor.root.innerHTML : '';
+    const descValue = descHtml === '<p><br></p>' ? null : descHtml;
     const payload = {
       node_name: name,
       node_id: category || 'Waypoints',
       altitude: altVal !== '' ? parseFloat(altVal) : null,
       timestamp: dateVal ? Math.floor(new Date(dateVal).getTime() / 1000) : undefined,
+      description: descValue,
     };
     await fetch(`${SECRET_PATH}/api/positions/${id}`, {
       method: 'PUT',
@@ -1146,7 +1178,27 @@
   function closeCarousel() { document.getElementById('carousel-modal').classList.add('hidden'); }
   function closeCarouselOutside(e) { if (e.target === document.getElementById('carousel-modal')) closeCarousel(); }
 
+  // ── Quill rich text editor (waypoint description) ─────────────
+  let wptDescEditor = null;
+  function initWptDescEditor() {
+    if (wptDescEditor) return;
+    wptDescEditor = new Quill('#wpt-desc-editor', {
+      theme: 'snow',
+      placeholder: 'Description…',
+      modules: {
+        toolbar: [
+          ['bold', 'italic', 'underline'],
+          [{ color: [] }],
+          [{ font: [] }],
+          [{ size: ['small', false, 'large', 'huge'] }],
+          ['clean']
+        ]
+      }
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
+    initWptDescEditor();
     document.getElementById('carousel-modal').addEventListener('wheel', e => {
       e.preventDefault();
       if (e.deltaY > 0) carouselNext(); else carouselPrev();
@@ -1493,11 +1545,15 @@
   }
 
   function buildWaypointPopup(p, color, hasPhotos) {
+    const descBlock = p.description
+      ? `<div style="margin:0.35rem 0 0.1rem; font-size:0.82rem; color:#cbd5e1; line-height:1.4; max-height:80px; overflow-y:auto;">${p.description}</div>`
+      : '';
     return `<div class="popup-title" style="color:${color}">${p.node_name || p.node_id}</div>
       <div class="popup-row">Dossier: <span>${p.node_id}</span></div>
       <div class="popup-row">Date: <span>${new Date(p.timestamp*1000).toLocaleString('fr-CH')}</span></div>
       ${p.altitude ? `<div class="popup-row">Altitude: <span>${Math.round(p.altitude)} m</span></div>` : ''}
       <div class="popup-row">Pos: <span>${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}</span></div>
+      ${descBlock}
       <div style="margin-top:0.5rem; display:flex; gap:0.4rem; justify-content:flex-end;">
         ${hasPhotos ? `<button onclick="openPhotoCarousel(${p.id})" style="background:#78350f; border:none; color:#fbbf24; border-radius:6px; padding:0.25rem 0.6rem; font-size:0.75rem; cursor:pointer;">📷 Photos</button>` : ''}
         <button onclick="openWaypointEditModal(${p.id})" style="background:#334155; border:none; color:#94a3b8; border-radius:6px; padding:0.25rem 0.6rem; font-size:0.75rem; cursor:pointer;">✏️ Modifier</button>

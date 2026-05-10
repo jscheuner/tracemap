@@ -3,6 +3,9 @@
 ## [En cours]
 
 ### Ajouté
+- Champ **Description** riche sur les waypoints (Quill.js) : gras, italique, souligné, couleur de texte, police, taille
+  - Stocké en HTML dans la colonne `description` de la table `positions`
+  - Affiché (rendu HTML) dans la popup du waypoint sur la carte
 - Sidebar avec onglets Tracés / Points GPS (dossiers collapsibles, édition/suppression par waypoint)
 - Toolbar reorganisée en 3 zones : gestion tracés / période+refresh / outils
 - Filter bar : chips sources (Meshtastic, Téléphone, GPX tracé, POI/Waypoints) + dossiers POI + appareils GPS

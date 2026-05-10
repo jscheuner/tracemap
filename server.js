@@ -83,6 +83,7 @@ try { db.exec('ALTER TABLE positions ADD COLUMN trace_id INTEGER REFERENCES trac
 try { db.exec("ALTER TABLE positions ADD COLUMN source TEXT DEFAULT 'meshtastic_mqtt'"); } catch {}
 try { db.exec("ALTER TABLE traces ADD COLUMN color TEXT DEFAULT '#3b82f6'"); } catch {}
 try { db.exec("ALTER TABLE traces ADD COLUMN description TEXT"); } catch {}
+try { db.exec("ALTER TABLE positions ADD COLUMN description TEXT"); } catch {}
 
 db.exec(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);`);
 
@@ -541,11 +542,12 @@ app.put(`/${CONFIG.secretPath}/api/traces/:id/end`, (req, res) => {
 
 app.put(`/${CONFIG.secretPath}/api/positions/:id`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
-  const { node_name, node_id, altitude, timestamp } = req.body;
+  const { node_name, node_id, altitude, timestamp, description } = req.body;
   if (node_name !== undefined) db.prepare('UPDATE positions SET node_name = ? WHERE id = ?').run(node_name, req.params.id);
   if (node_id !== undefined) db.prepare('UPDATE positions SET node_id = ? WHERE id = ?').run(node_id, req.params.id);
   if (altitude !== undefined) db.prepare('UPDATE positions SET altitude = ? WHERE id = ?').run(altitude, req.params.id);
   if (timestamp !== undefined) db.prepare('UPDATE positions SET timestamp = ? WHERE id = ?').run(timestamp, req.params.id);
+  if (description !== undefined) db.prepare('UPDATE positions SET description = ? WHERE id = ?').run(description || null, req.params.id);
   res.json(db.prepare('SELECT * FROM positions WHERE id = ?').get(req.params.id));
 });
 
