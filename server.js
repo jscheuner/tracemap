@@ -806,8 +806,47 @@ app.post(`/${CONFIG.secretPath}/api/photos/bulk`, uploadTmp.array('photos', 100)
         results.errors.push({ file: file.originalname, error: e.message });
       }
     }
+  } else if (req.body.match_waypoints) {
+    // Import global : matching GPS → waypoint le plus proche dans le rayon
+    const allWpts = db.prepare("SELECT * FROM positions WHERE source = 'gpx_waypoint'").all();
+    const radius = parseInt(getSetting('photoMatchRadius')) || 50;
+    results.no_match = [];
+    const folder = 'imports';
+    fs.mkdirSync(path.join(PHOTOS_DIR, folder), { recursive: true });
+
+    for (const file of files) {
+      try {
+        let gps = null;
+        try { gps = await Promise.race([exifr.gps(file.path), timeout(8000)]); } catch {}
+
+        if (gps && typeof gps.latitude === 'number' && isFinite(gps.latitude)) {
+          let best = null, bestDist = Infinity;
+          for (const w of allWpts) {
+            const d = haversineMeters(gps.latitude, gps.longitude, w.latitude, w.longitude);
+            if (d < bestDist) { bestDist = d; best = w; }
+          }
+          if (best && bestDist <= radius) {
+            const dest = path.join(PHOTOS_DIR, folder, file.filename);
+            fs.renameSync(file.path, dest);
+            const filepath = `${folder}/${file.filename}`;
+            db.prepare('INSERT INTO photos (position_id, filepath, original_name, created_at) VALUES (?, ?, ?, ?)')
+              .run(best.id, filepath, file.originalname, Math.floor(Date.now() / 1000));
+            results.linked.push({ file: file.originalname, waypoint_name: best.node_name || best.node_id, dist: Math.round(bestDist) });
+          } else {
+            try { fs.unlinkSync(file.path); } catch {}
+            results.no_match.push({ file: file.originalname, nearest_name: best ? (best.node_name || best.node_id) : null, nearest_dist: best ? Math.round(bestDist) : null });
+          }
+        } else {
+          try { fs.unlinkSync(file.path); } catch {}
+          results.no_gps.push({ file: file.originalname });
+        }
+      } catch(e) {
+        try { fs.unlinkSync(file.path); } catch {}
+        results.errors.push({ file: file.originalname, error: e.message });
+      }
+    }
   } else {
-    return res.status(400).json({ error: 'position_id ou trace_id requis' });
+    return res.status(400).json({ error: 'position_id, trace_id ou match_waypoints requis' });
   }
   res.json(results);
 });
