@@ -1454,10 +1454,15 @@
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors', maxZoom: 19 }).addTo(map);
   }
 
-  function getMarkerIcon(source, isLast, traceColor) {
+  function getMarkerIcon(source, isLast, traceColor, hasPhotos) {
     const color = traceColor || SOURCE_COLORS[source] || '#94a3b8';
     const size = isLast ? 18 : 12, border = isLast ? 3 : 2;
-    return L.divIcon({ html: `<div style="background:${color};width:${size}px;height:${size}px;border-radius:50%;border:${border}px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4)"></div>`, iconSize: [size, size], iconAnchor: [size/2, size/2] });
+    const badge = hasPhotos ? `<span style="position:absolute;top:-8px;right:-8px;font-size:11px;line-height:1;">📷</span>` : '';
+    return L.divIcon({
+      html: `<div style="position:relative;width:${size}px;height:${size}px;"><div style="background:${color};width:${size}px;height:${size}px;border-radius:50%;border:${border}px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.4)"></div>${badge}</div>`,
+      iconSize: [size + (hasPhotos ? 8 : 0), size + (hasPhotos ? 8 : 0)],
+      iconAnchor: [(size + (hasPhotos ? 8 : 0)) / 2, (size + (hasPhotos ? 8 : 0)) / 2]
+    });
   }
 
   function getSelectedTraceColor() {
@@ -1753,9 +1758,13 @@
       polyline = L.polyline(trackPts.map(p => [p.latitude,p.longitude]), { color: traceColor||'#3b82f6', weight: 3, opacity: 0.7 }).addTo(map);
 
     if (trackPts.length) {
-      trackPts.slice(0,-1).forEach(p => markers.push(L.marker([p.latitude,p.longitude],{icon:getMarkerIcon(p.source,false,traceColor)}).addTo(map).bindPopup(buildPopup(p))));
+      trackPts.slice(0,-1).forEach(p => {
+        const hp = wptPhotoIds.has(p.id);
+        markers.push(L.marker([p.latitude,p.longitude],{icon:getMarkerIcon(p.source,false,traceColor,hp)}).addTo(map).bindPopup(buildPopup(p,hp)));
+      });
       const last = trackPts[trackPts.length-1];
-      markers.push(L.marker([last.latitude,last.longitude],{icon:getMarkerIcon(last.source,true,traceColor)}).addTo(map).bindPopup(buildPopup(last)).openPopup());
+      const lastHp = wptPhotoIds.has(last.id);
+      markers.push(L.marker([last.latitude,last.longitude],{icon:getMarkerIcon(last.source,true,traceColor,lastHp)}).addTo(map).bindPopup(buildPopup(last,lastHp)).openPopup());
       updateInfoPanel(last);
     }
 
@@ -1776,14 +1785,15 @@
     document.getElementById('points-count').textContent = filtered.length;
   }
 
-  function buildPopup(p) {
+  function buildPopup(p, hasPhotos) {
     return `<div class="popup-title">${p.node_name||p.node_id}</div>
       <div class="popup-row">Source: <span>${SOURCE_LABELS[p.source]||'—'}</span></div>
       <div class="popup-row">Heure: <span>${new Date(p.timestamp*1000).toLocaleString('fr-CH')}</span></div>
       <div class="popup-row">Position: <span>${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}</span></div>
       ${p.altitude?`<div class="popup-row">Altitude: <span>${p.altitude}m</span></div>`:''}
       ${p.speed?`<div class="popup-row">Vitesse: <span>${p.speed} km/h</span></div>`:''}
-      ${p.battery?`<div class="popup-row">Batterie: <span>${p.battery}%</span></div>`:''}`;
+      ${p.battery?`<div class="popup-row">Batterie: <span>${p.battery}%</span></div>`:''}
+      ${hasPhotos?`<div style="margin-top:0.5rem; text-align:right;"><button onclick="openPhotoCarousel(${p.id})" style="background:#78350f;border:none;color:#fbbf24;border-radius:6px;padding:0.25rem 0.6rem;font-size:0.75rem;cursor:pointer;">📷 Photos</button></div>`:''}`;
   }
 
   function updateInfoPanel(p) {
