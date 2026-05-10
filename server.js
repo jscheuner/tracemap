@@ -596,8 +596,9 @@ app.post(`/${CONFIG.secretPath}/api/positions/ingest`, (req, res) => {
 });
 
 // ── Traccar Client ───────────────────────────────────────────
-app.get(`/${CONFIG.secretPath}/api/traccar`, (req, res) => {
-  const { id, lat, lon, timestamp, altitude, speed, bearing, accuracy, hdop, batt } = req.query;
+app.all(`/${CONFIG.secretPath}/api/traccar`, (req, res) => {
+  const p = { ...req.query, ...req.body };
+  const { id, lat, lon, timestamp, altitude, speed, bearing, accuracy, hdop, batt } = p;
   const latitude = parseFloat(lat);
   const longitude = parseFloat(lon);
   if (!lat || !lon || isNaN(latitude) || isNaN(longitude)) return res.status(400).send('Missing or invalid lat/lon');
