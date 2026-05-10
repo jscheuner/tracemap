@@ -730,9 +730,86 @@ app.get(`/${CONFIG.secretPath}/api/photos/summary`, (req, res) => {
 
 app.get(`/${CONFIG.secretPath}/api/photos`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
-  const { position_id } = req.query;
-  if (!position_id) return res.status(400).json({ error: 'position_id requis' });
-  res.json(db.prepare('SELECT * FROM photos WHERE position_id = ? ORDER BY created_at').all(parseInt(position_id)));
+  const { position_id, trace_id } = req.query;
+  if (trace_id) {
+    res.json(db.prepare(`SELECT ph.*, pos.node_name, pos.latitude, pos.longitude
+      FROM photos ph JOIN positions pos ON pos.id = ph.position_id
+      WHERE pos.trace_id = ? ORDER BY ph.created_at`).all(parseInt(trace_id)));
+  } else if (position_id) {
+    res.json(db.prepare('SELECT * FROM photos WHERE position_id = ? ORDER BY created_at').all(parseInt(position_id)));
+  } else {
+    return res.status(400).json({ error: 'position_id ou trace_id requis' });
+  }
+});
+
+// Import en masse : position_id (wpt) ou trace_id (trace avec matching GPS)
+app.post(`/${CONFIG.secretPath}/api/photos/bulk`, uploadTmp.array('photos', 100), async (req, res) => {
+  if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
+  const files = req.files || [];
+  const { position_id, trace_id } = req.body;
+  const results = { linked: [], no_gps: [], errors: [] };
+  const timeout = ms => new Promise((_, r) => setTimeout(() => r(new Error('timeout')), ms));
+
+  if (position_id) {
+    // Waypoint bulk : toutes les photos liées directement
+    const pid = parseInt(position_id);
+    const wpt = db.prepare('SELECT * FROM positions WHERE id = ?').get(pid);
+    if (!wpt) return res.status(404).json({ error: 'Waypoint introuvable' });
+    const folder = wpt.node_id || 'default';
+    for (const file of files) {
+      try {
+        const dest = path.join(PHOTOS_DIR, folder, file.filename);
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        fs.renameSync(file.path, dest);
+        const filepath = `${folder}/${file.filename}`;
+        db.prepare('INSERT INTO photos (position_id, filepath, original_name, created_at) VALUES (?, ?, ?, ?)')
+          .run(pid, filepath, file.originalname, Math.floor(Date.now() / 1000));
+        results.linked.push({ file: file.originalname, position_id: pid });
+      } catch(e) {
+        try { fs.unlinkSync(file.path); } catch {}
+        results.errors.push({ file: file.originalname, error: e.message });
+      }
+    }
+  } else if (trace_id) {
+    // Trace bulk : matching GPS → point le plus proche, sinon premier point
+    const tid = parseInt(trace_id);
+    const tracePos = db.prepare("SELECT * FROM positions WHERE trace_id = ? AND source != 'gpx_waypoint' ORDER BY timestamp ASC").all(tid);
+    if (!tracePos.length) return res.status(400).json({ error: 'Aucun point GPS dans ce tracé' });
+    const firstPos = tracePos[0];
+    const folder = `trace_${tid}`;
+    fs.mkdirSync(path.join(PHOTOS_DIR, folder), { recursive: true });
+
+    for (const file of files) {
+      try {
+        let targetPos = null, dist = null;
+        try {
+          const gps = await Promise.race([exifr.gps(file.path), timeout(8000)]);
+          if (gps && typeof gps.latitude === 'number' && isFinite(gps.latitude)) {
+            let best = firstPos, bestDist = Infinity;
+            for (const p of tracePos) {
+              const d = haversineMeters(gps.latitude, gps.longitude, p.latitude, p.longitude);
+              if (d < bestDist) { bestDist = d; best = p; }
+            }
+            targetPos = best; dist = Math.round(bestDist);
+          }
+        } catch {}
+        const dest = path.join(PHOTOS_DIR, folder, file.filename);
+        fs.renameSync(file.path, dest);
+        const filepath = `${folder}/${file.filename}`;
+        const pid = targetPos ? targetPos.id : firstPos.id;
+        db.prepare('INSERT INTO photos (position_id, filepath, original_name, created_at) VALUES (?, ?, ?, ?)')
+          .run(pid, filepath, file.originalname, Math.floor(Date.now() / 1000));
+        if (targetPos) results.linked.push({ file: file.originalname, position_id: pid, dist });
+        else results.no_gps.push({ file: file.originalname, position_id: firstPos.id });
+      } catch(e) {
+        try { fs.unlinkSync(file.path); } catch {}
+        results.errors.push({ file: file.originalname, error: e.message });
+      }
+    }
+  } else {
+    return res.status(400).json({ error: 'position_id ou trace_id requis' });
+  }
+  res.json(results);
 });
 
 app.delete(`/${CONFIG.secretPath}/api/photos/:id`, (req, res) => {
