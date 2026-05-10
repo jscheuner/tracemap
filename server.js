@@ -623,6 +623,7 @@ app.get(`/${CONFIG.secretPath}/api/traccar`, (req, res) => {
     batt != null ? parseInt(batt) : null,
     ts, traceId
   );
+  console.log(`📱 Traccar [${deviceId}] lat=${latitude.toFixed(5)} lon=${longitude.toFixed(5)} alt=${altitude ?? '?'}m → tracé #${traceId}`);
   res.status(200).send('OK');
 });
 
@@ -728,9 +729,6 @@ app.delete(`/${CONFIG.secretPath}/api/photos/:id`, (req, res) => {
   res.json({ success: true });
 });
 
-app.get('/tracker-app.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'tracker-app.html'));
-});
 
 
 app.get(`/${CONFIG.secretPath}`, (req, res) => {
