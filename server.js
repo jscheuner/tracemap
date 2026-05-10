@@ -516,7 +516,7 @@ app.post(`/${CONFIG.secretPath}/api/traces`, (req, res) => {
 app.delete(`/${CONFIG.secretPath}/api/traces/:id`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const id = req.params.id;
-  db.prepare('DELETE FROM positions WHERE trace_id = ?').run(id);
+  db.prepare("DELETE FROM positions WHERE trace_id = ? AND source != 'gpx_waypoint'").run(id);
   db.prepare('DELETE FROM traces WHERE id = ?').run(id);
   res.json({ success: true });
 });
@@ -565,8 +565,8 @@ app.post(`/${CONFIG.secretPath}/api/positions/ingest`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const { points, trace_id, source = 'phone_gps' } = req.body;
   if (!Array.isArray(points) || points.length === 0) return res.status(400).json({ error: 'points doit être un tableau non vide' });
-  const traceId = trace_id ? parseInt(trace_id) : (getCurrentTrace()?.id || ensureActiveTrace().id);
   const isWaypoint = source === 'gpx_waypoint';
+  const traceId = isWaypoint ? null : (trace_id ? parseInt(trace_id) : (getCurrentTrace()?.id || ensureActiveTrace().id));
   const insert = db.prepare(`
     INSERT ${isWaypoint ? 'OR IGNORE' : ''} INTO positions (node_id, node_name, latitude, longitude, altitude, speed, battery, timestamp, trace_id, source)
     VALUES (@node_id, @node_name, @latitude, @longitude, @altitude, @speed, @battery, @timestamp, @trace_id, @source)
