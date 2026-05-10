@@ -141,8 +141,8 @@
 
     /* ── Quill dark theme ── */
     .ql-toolbar.ql-snow { background: #0f172a; border: 1px solid #334155; border-radius: 8px 8px 0 0; }
-    .ql-container.ql-snow { background: #0f172a; border: 1px solid #334155; border-top: none; border-radius: 0 0 8px 8px; min-height: 90px; }
-    .ql-editor { color: #e2e8f0; font-size: 0.9rem; min-height: 90px; }
+    .ql-container.ql-snow { background: #0f172a; border: 1px solid #334155; border-top: none; border-radius: 0 0 8px 8px; overflow: hidden; }
+    .ql-editor { color: #e2e8f0; font-size: 0.9rem; min-height: 80px; }
     .ql-editor.ql-blank::before { color: #475569; font-style: normal; }
     .ql-snow .ql-stroke { stroke: #94a3b8; }
     .ql-snow .ql-fill { fill: #94a3b8; }
@@ -153,7 +153,10 @@
     .ql-snow .ql-active .ql-stroke, .ql-snow button:hover .ql-stroke { stroke: #3b82f6; }
     .ql-snow .ql-active .ql-fill, .ql-snow button:hover .ql-fill { fill: #3b82f6; }
     .ql-snow .ql-color-picker .ql-picker-options { width: 152px; padding: 4px; }
-    #wpt-desc-wrapper { margin-bottom: 0.75rem; }
+    #wpt-desc-wrapper { margin-bottom: 0.75rem; resize: vertical; overflow: hidden; min-height: 120px; border-radius: 0 0 8px 8px; display: flex; flex-direction: column; }
+    #wpt-desc-wrapper .ql-toolbar { flex-shrink: 0; }
+    #wpt-desc-wrapper .ql-container { flex: 1; overflow-y: auto; }
+    #wpt-desc-wrapper .ql-editor { height: 100%; min-height: unset; }
     .gpx-preview { background: #0f172a; border-radius: 8px; padding: 0.75rem; margin: 0.5rem 0; font-size: 0.8rem; color: #64748b; min-height: 48px; }
     .gpx-preview strong { color: #e2e8f0; }
 
@@ -406,7 +409,7 @@
 
 <!-- Modal édition waypoint -->
 <div id="wpt-edit-modal" class="modal-overlay hidden">
-  <div class="modal-box">
+  <div class="modal-box" style="max-height:92vh; overflow-y:auto; display:flex; flex-direction:column;">
     <h3>Modifier le point GPS</h3>
     <input type="hidden" id="wpt-edit-id"/>
 
@@ -446,7 +449,7 @@
     </div>
     <input type="file" id="wpt-photo-input" accept="image/*" style="display:none" onchange="handlePhotoFileSelected(this)"/>
 
-    <div class="modal-actions" style="justify-content:space-between;">
+    <div class="modal-actions" style="justify-content:space-between; position:sticky; bottom:-2rem; background:#1e293b; padding:0.75rem 0 0; margin-top:1rem; border-top:1px solid #334155;">
       <button class="btn btn-danger" onclick="deleteWaypointFromModal()">Supprimer</button>
       <div style="display:flex;gap:0.75rem;">
         <button class="btn btn-ghost" onclick="closeWaypointEditModal()">Annuler</button>
