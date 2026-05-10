@@ -41,7 +41,10 @@
 ### Système
 - [x] Credentials extraits dans `config.local.js` (gitignore)
 - [x] Base SQLite persistante avec `keepDays = 36500`
-- [x] Sessions admin avec expiration 24h
+- [x] Sessions admin avec expiration 24h (login mot de passe)
+- [x] Tokens persistants sans expiration (table `tokens` DB) — gérés depuis ⚙️ Paramètres
+- [x] QR code par token → sauvegarde automatique dans localStorage du téléphone
+- [x] URL admin simplifiée : `/admin` (plus de chemin secret dans l'URL)
 - [x] PM2 process `tracemap`
 
 ## 🔲 Backlog / Idées
@@ -51,6 +54,7 @@
 - [ ] Recherche dans la liste des waypoints
 - [ ] Tri des tracés (par date, par nom)
 - [ ] Indicateur temps réel "en ligne" par appareil Meshtastic
+- [ ] Déduplication à l'import de photos : vérifier si `original_name` + `position_id` existe déjà en base avant d'insérer, signaler les doublons dans le rapport d'import
 
 ### Moyen terme
 - [ ] Vue publique en lecture seule (partage de lien)

@@ -95,6 +95,14 @@ db.exec(`CREATE TABLE IF NOT EXISTS photos (
   original_name TEXT,
   created_at INTEGER DEFAULT (strftime('%s','now'))
 );`);
+
+db.exec(`CREATE TABLE IF NOT EXISTS tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  token TEXT NOT NULL UNIQUE,
+  label TEXT,
+  created_at INTEGER DEFAULT (strftime('%s','now'))
+);`);
+
 db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run('autoRollover', 'true');
 db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run('photoMatchRadius', '50');
 db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)").run('wptCategories', '[]');
@@ -151,6 +159,11 @@ function scheduleMidnightRollover() {
 ensureActiveTrace();
 scheduleMidnightRollover();
 
+// Génère le token Traccar dédié au premier démarrage
+if (!getSetting('traccarToken')) {
+  setSetting('traccarToken', crypto.randomBytes(16).toString('hex'));
+}
+
 const sessions = new Map();
 function createSession() {
   const token = crypto.randomBytes(32).toString('hex');
@@ -160,7 +173,9 @@ function createSession() {
 }
 function isAuthenticated(req) {
   const token = req.headers['x-session-token'] || req.query.token;
-  return token && sessions.has(token);
+  if (!token) return false;
+  if (sessions.has(token)) return true;
+  return !!db.prepare('SELECT id FROM tokens WHERE token = ?').get(token);
 }
 
 function buildNonce(packetId, fromNode) {
@@ -440,7 +455,7 @@ mqttClient.on('message', (topic, payload) => {
 mqttClient.on('error', (err) => console.error('❌ MQTT:', err.message));
 mqttClient.on('reconnect', () => console.log('🔄 Reconnexion MQTT...'));
 
-app.post(`/${CONFIG.secretPath}/login`, (req, res) => {
+app.post(`/login`, (req, res) => {
   const { password } = req.body;
   if (password === CONFIG.webPassword) {
     res.json({ success: true, token: createSession() });
@@ -450,7 +465,7 @@ app.post(`/${CONFIG.secretPath}/login`, (req, res) => {
 });
 
 
-app.get(`/${CONFIG.secretPath}/api/positions`, (req, res) => {
+app.get(`/api/positions`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const { hours, from, to, node_id, trace_id } = req.query;
   let query, params;
@@ -472,18 +487,18 @@ app.get(`/${CONFIG.secretPath}/api/positions`, (req, res) => {
   res.json(db.prepare(query).all(...params));
 });
 
-app.get(`/${CONFIG.secretPath}/api/last`, (req, res) => {
+app.get(`/api/last`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   res.json(db.prepare('SELECT * FROM positions ORDER BY timestamp DESC LIMIT 1').get() || null);
 });
 
-app.get(`/${CONFIG.secretPath}/api/stats`, (req, res) => {
+app.get(`/api/stats`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   res.json(db.prepare(`SELECT COUNT(*) as total_points, MIN(timestamp) as first_seen,
     MAX(timestamp) as last_seen, COUNT(DISTINCT node_id) as nodes FROM positions`).get());
 });
 
-app.get(`/${CONFIG.secretPath}/api/traces`, (req, res) => {
+app.get(`/api/traces`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   res.json(db.prepare(`
     SELECT t.*, COUNT(p.id) as point_count
@@ -492,7 +507,7 @@ app.get(`/${CONFIG.secretPath}/api/traces`, (req, res) => {
   `).all());
 });
 
-app.put(`/${CONFIG.secretPath}/api/traces/:id`, (req, res) => {
+app.put(`/api/traces/:id`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const { name, color, description, start_time, end_time } = req.body;
   console.log(`📝 Mise à jour tracé ${req.params.id}:`, { name, color, description, start_time, end_time });
@@ -506,7 +521,7 @@ app.put(`/${CONFIG.secretPath}/api/traces/:id`, (req, res) => {
   res.json(updated);
 });
 
-app.post(`/${CONFIG.secretPath}/api/traces`, (req, res) => {
+app.post(`/api/traces`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const { name } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Nom requis' });
@@ -514,7 +529,7 @@ app.post(`/${CONFIG.secretPath}/api/traces`, (req, res) => {
   res.json(trace);
 });
 
-app.delete(`/${CONFIG.secretPath}/api/traces/:id`, (req, res) => {
+app.delete(`/api/traces/:id`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const id = req.params.id;
   db.prepare("DELETE FROM positions WHERE trace_id = ? AND source != 'gpx_waypoint'").run(id);
@@ -522,7 +537,7 @@ app.delete(`/${CONFIG.secretPath}/api/traces/:id`, (req, res) => {
   res.json({ success: true });
 });
 
-app.get(`/${CONFIG.secretPath}/api/settings`, (req, res) => {
+app.get(`/api/settings`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const rows = db.prepare('SELECT * FROM settings').all();
   const s = {};
@@ -530,7 +545,7 @@ app.get(`/${CONFIG.secretPath}/api/settings`, (req, res) => {
   res.json(s);
 });
 
-app.put(`/${CONFIG.secretPath}/api/settings`, (req, res) => {
+app.put(`/api/settings`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const { autoRollover, photoMatchRadius, wptCategories } = req.body;
   if (autoRollover !== undefined) setSetting('autoRollover', autoRollover ? 'true' : 'false');
@@ -539,13 +554,13 @@ app.put(`/${CONFIG.secretPath}/api/settings`, (req, res) => {
   res.json({ success: true });
 });
 
-app.put(`/${CONFIG.secretPath}/api/traces/:id/end`, (req, res) => {
+app.put(`/api/traces/:id/end`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   db.prepare('UPDATE traces SET end_time = ? WHERE id = ?').run(Math.floor(Date.now() / 1000), req.params.id);
   res.json({ success: true });
 });
 
-app.put(`/${CONFIG.secretPath}/api/positions/:id`, (req, res) => {
+app.put(`/api/positions/:id`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const { node_name, node_id, altitude, timestamp, description } = req.body;
   if (node_name !== undefined) db.prepare('UPDATE positions SET node_name = ? WHERE id = ?').run(node_name, req.params.id);
@@ -556,13 +571,13 @@ app.put(`/${CONFIG.secretPath}/api/positions/:id`, (req, res) => {
   res.json(db.prepare('SELECT * FROM positions WHERE id = ?').get(req.params.id));
 });
 
-app.delete(`/${CONFIG.secretPath}/api/positions/:id`, (req, res) => {
+app.delete(`/api/positions/:id`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   db.prepare('DELETE FROM positions WHERE id = ?').run(req.params.id);
   res.json({ success: true });
 });
 
-app.post(`/${CONFIG.secretPath}/api/positions/ingest`, (req, res) => {
+app.post(`/api/positions/ingest`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const { points, trace_id, source = 'phone_gps' } = req.body;
   if (!Array.isArray(points) || points.length === 0) return res.status(400).json({ error: 'points doit être un tableau non vide' });
@@ -597,8 +612,10 @@ app.post(`/${CONFIG.secretPath}/api/positions/ingest`, (req, res) => {
 });
 
 // ── Traccar Client ───────────────────────────────────────────
-app.all(`/${CONFIG.secretPath}/api/traccar`, (req, res) => {
+app.all(`/api/traccar`, (req, res) => {
+  const traccarToken = getSetting('traccarToken');
   const p = { ...req.query, ...req.body };
+  if (p.token !== traccarToken) return res.status(401).send('Unauthorized');
   // Supporte le format flat (query params) ET le format imbriqué (Background Geolocation / transistorsoft)
   let lat = p.lat, lon = p.lon, timestamp = p.timestamp;
   let altitude = p.altitude, speed = p.speed, accuracy = p.accuracy || p.hdop;
@@ -645,13 +662,13 @@ app.all(`/${CONFIG.secretPath}/api/traccar`, (req, res) => {
 
 // ── Photos ───────────────────────────────────────────────────
 
-app.get(`/${CONFIG.secretPath}/photos/*`, (req, res) => {
+app.get(`/photos/*`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).send('Non autorisé');
   const safePath = path.normalize(req.params[0]).replace(/^(\.\.(\/|\\|$))+/, '');
   res.sendFile(safePath, { root: PHOTOS_DIR });
 });
 
-app.post(`/${CONFIG.secretPath}/api/photos/upload`, uploadTmp.single('photo'), async (req, res) => {
+app.post(`/api/photos/upload`, uploadTmp.single('photo'), async (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const file = req.file;
   if (!file) return res.status(400).json({ error: 'Aucun fichier' });
@@ -704,7 +721,7 @@ app.post(`/${CONFIG.secretPath}/api/photos/upload`, uploadTmp.single('photo'), a
   res.json({ tempId: file.filename, originalName: file.originalname, gps, candidates });
 });
 
-app.post(`/${CONFIG.secretPath}/api/photos/confirm`, (req, res) => {
+app.post(`/api/photos/confirm`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const { tempId, position_id, original_name } = req.body;
   if (!tempId || !position_id) return res.status(400).json({ error: 'Paramètres manquants' });
@@ -722,13 +739,13 @@ app.post(`/${CONFIG.secretPath}/api/photos/confirm`, (req, res) => {
   res.json({ id: result.lastInsertRowid, filepath });
 });
 
-app.get(`/${CONFIG.secretPath}/api/photos/summary`, (req, res) => {
+app.get(`/api/photos/summary`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const rows = db.prepare('SELECT DISTINCT position_id FROM photos').all();
   res.json(rows.map(r => r.position_id));
 });
 
-app.get(`/${CONFIG.secretPath}/api/photos`, (req, res) => {
+app.get(`/api/photos`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const { position_id, trace_id } = req.query;
   if (trace_id) {
@@ -743,7 +760,7 @@ app.get(`/${CONFIG.secretPath}/api/photos`, (req, res) => {
 });
 
 // Import en masse : position_id (wpt) ou trace_id (trace avec matching GPS)
-app.post(`/${CONFIG.secretPath}/api/photos/bulk`, uploadTmp.array('photos', 100), async (req, res) => {
+app.post(`/api/photos/bulk`, uploadTmp.array('photos', 100), async (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const files = req.files || [];
   const { position_id, trace_id } = req.body;
@@ -810,16 +827,28 @@ app.post(`/${CONFIG.secretPath}/api/photos/bulk`, uploadTmp.array('photos', 100)
     // Import global : matching GPS → waypoint le plus proche dans le rayon
     const allWpts = db.prepare("SELECT * FROM positions WHERE source = 'gpx_waypoint'").all();
     const radius = parseInt(getSetting('photoMatchRadius')) || 50;
-    results.no_match = [];
     const folder = 'imports';
     fs.mkdirSync(path.join(PHOTOS_DIR, folder), { recursive: true });
 
+    const pendingFolder = path.join(PHOTOS_DIR, 'imports', 'pending');
+    fs.mkdirSync(pendingFolder, { recursive: true });
+
+    const noMatchItems = [];
+
     for (const file of files) {
       try {
-        let gps = null;
-        try { gps = await Promise.race([exifr.gps(file.path), timeout(8000)]); } catch {}
+        let gps = null, exifDate = null;
+        try {
+          const exifData = await Promise.race([exifr.parse(file.path, { gps: true, tiff: true, exif: true }), timeout(8000)]);
+          if (exifData) {
+            if (typeof exifData.latitude === 'number' && isFinite(exifData.latitude))
+              gps = { latitude: exifData.latitude, longitude: exifData.longitude };
+            if (exifData.DateTimeOriginal)
+              exifDate = Math.floor(new Date(exifData.DateTimeOriginal).getTime() / 1000);
+          }
+        } catch {}
 
-        if (gps && typeof gps.latitude === 'number' && isFinite(gps.latitude)) {
+        if (gps) {
           let best = null, bestDist = Infinity;
           for (const w of allWpts) {
             const d = haversineMeters(gps.latitude, gps.longitude, w.latitude, w.longitude);
@@ -833,17 +862,49 @@ app.post(`/${CONFIG.secretPath}/api/photos/bulk`, uploadTmp.array('photos', 100)
               .run(best.id, filepath, file.originalname, Math.floor(Date.now() / 1000));
             results.linked.push({ file: file.originalname, waypoint_name: best.node_name || best.node_id, dist: Math.round(bestDist) });
           } else {
-            try { fs.unlinkSync(file.path); } catch {}
-            results.no_match.push({ file: file.originalname, nearest_name: best ? (best.node_name || best.node_id) : null, nearest_dist: best ? Math.round(bestDist) : null });
+            const pendingPath = path.join(pendingFolder, file.filename);
+            fs.renameSync(file.path, pendingPath);
+            noMatchItems.push({
+              file: file.originalname,
+              tempFilename: file.filename,
+              lat: gps.latitude,
+              lon: gps.longitude,
+              exif_date: exifDate,
+              nearest_name: best ? (best.node_name || best.node_id) : null,
+              nearest_dist: best ? Math.round(bestDist) : null
+            });
           }
         } else {
-          try { fs.unlinkSync(file.path); } catch {}
-          results.no_gps.push({ file: file.originalname });
+          const pendingPath = path.join(pendingFolder, file.filename);
+          try { fs.renameSync(file.path, pendingPath); } catch { try { fs.unlinkSync(file.path); } catch {} }
+          results.no_gps.push({ file: file.originalname, tempFilename: file.filename });
         }
       } catch(e) {
         try { fs.unlinkSync(file.path); } catch {}
         results.errors.push({ file: file.originalname, error: e.message });
       }
+    }
+
+    // Regrouper les no_match par proximité (rayon identique au matching)
+    const assigned = new Set();
+    results.no_match = [];
+    for (let i = 0; i < noMatchItems.length; i++) {
+      if (assigned.has(i)) continue;
+      const base = noMatchItems[i];
+      const cluster = {
+        photos: [{ file: base.file, tempFilename: base.tempFilename, exif_date: base.exif_date }],
+        lat: base.lat, lon: base.lon,
+        nearest_name: base.nearest_name, nearest_dist: base.nearest_dist
+      };
+      assigned.add(i);
+      for (let j = i + 1; j < noMatchItems.length; j++) {
+        if (assigned.has(j)) continue;
+        if (haversineMeters(base.lat, base.lon, noMatchItems[j].lat, noMatchItems[j].lon) <= radius) {
+          cluster.photos.push({ file: noMatchItems[j].file, tempFilename: noMatchItems[j].tempFilename, exif_date: noMatchItems[j].exif_date });
+          assigned.add(j);
+        }
+      }
+      results.no_match.push(cluster);
     }
   } else {
     return res.status(400).json({ error: 'position_id, trace_id ou match_waypoints requis' });
@@ -851,7 +912,71 @@ app.post(`/${CONFIG.secretPath}/api/photos/bulk`, uploadTmp.array('photos', 100)
   res.json(results);
 });
 
-app.delete(`/${CONFIG.secretPath}/api/photos/:id`, (req, res) => {
+app.post(`/api/photos/create-waypoint`, (req, res) => {
+  if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
+  const { tempFilename, lat, lon, exif_date, name, folder, original_name, position_id } = req.body;
+  if (!tempFilename) return res.status(400).json({ error: 'tempFilename manquant' });
+
+  const srcPath = path.join(PHOTOS_DIR, 'imports', 'pending', tempFilename);
+
+  if (position_id) {
+    // Lier à un waypoint existant
+    const wpt = db.prepare('SELECT * FROM positions WHERE id = ?').get(parseInt(position_id));
+    if (!wpt) return res.status(404).json({ error: 'Waypoint introuvable' });
+    const destFolder = path.join(PHOTOS_DIR, wpt.node_id || 'imports');
+    fs.mkdirSync(destFolder, { recursive: true });
+    const destPath = path.join(destFolder, tempFilename);
+    try { fs.renameSync(srcPath, destPath); } catch {}
+    const filepath = `${wpt.node_id || 'imports'}/${tempFilename}`;
+    db.prepare('INSERT INTO photos (position_id, filepath, original_name, created_at) VALUES (?, ?, ?, ?)')
+      .run(wpt.id, filepath, original_name || tempFilename, Math.floor(Date.now() / 1000));
+    return res.json({ id: wpt.id, node_name: wpt.node_name, node_id: wpt.node_id });
+  }
+
+  // Créer un nouveau waypoint
+  if (lat == null || lon == null) return res.status(400).json({ error: 'lat/lon manquants' });
+  const nodeId = (folder || 'Imports').trim();
+  const nodeName = (name || original_name || 'Photo').trim();
+  const ts = exif_date || Math.floor(Date.now() / 1000);
+
+  const pos = db.prepare(
+    'INSERT INTO positions (node_id, node_name, latitude, longitude, timestamp, source) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(nodeId, nodeName, parseFloat(lat), parseFloat(lon), ts, 'gpx_waypoint');
+
+  const destFolder = path.join(PHOTOS_DIR, nodeId);
+  fs.mkdirSync(destFolder, { recursive: true });
+  const destPath = path.join(destFolder, tempFilename);
+  try { fs.renameSync(srcPath, destPath); } catch {}
+
+  const filepath = `${nodeId}/${tempFilename}`;
+  db.prepare('INSERT INTO photos (position_id, filepath, original_name, created_at) VALUES (?, ?, ?, ?)')
+    .run(pos.lastInsertRowid, filepath, original_name || nodeName, Math.floor(Date.now() / 1000));
+
+  res.json({ id: pos.lastInsertRowid, node_name: nodeName, node_id: nodeId });
+});
+
+app.delete(`/api/photos/all`, (req, res) => {
+  if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
+  const { position_id, trace_id } = req.query;
+  let photos = [];
+  if (position_id) {
+    photos = db.prepare('SELECT * FROM photos WHERE position_id = ?').all(parseInt(position_id));
+  } else if (trace_id) {
+    photos = db.prepare(`SELECT ph.* FROM photos ph
+      JOIN positions p ON p.id = ph.position_id
+      WHERE p.trace_id = ?`).all(parseInt(trace_id));
+  } else {
+    return res.status(400).json({ error: 'position_id ou trace_id requis' });
+  }
+  for (const photo of photos) {
+    const fullPath = path.join(PHOTOS_DIR, photo.filepath);
+    if (fs.existsSync(fullPath)) try { fs.unlinkSync(fullPath); } catch {}
+    db.prepare('DELETE FROM photos WHERE id = ?').run(photo.id);
+  }
+  res.json({ deleted: photos.length });
+});
+
+app.delete(`/api/photos/:id`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const photo = db.prepare('SELECT * FROM photos WHERE id = ?').get(parseInt(req.params.id));
   if (!photo) return res.status(404).json({ error: 'Photo introuvable' });
@@ -863,11 +988,33 @@ app.delete(`/${CONFIG.secretPath}/api/photos/:id`, (req, res) => {
 
 
 
-app.get(`/${CONFIG.secretPath}`, (req, res) => {
+// ── Gestion des tokens persistants ───────────────────────────
+app.get('/api/tokens', (req, res) => {
+  if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
+  const rows = db.prepare('SELECT id, label, created_at FROM tokens ORDER BY created_at DESC').all();
+  res.json(rows);
+});
+
+app.post('/api/tokens', (req, res) => {
+  if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
+  const { label } = req.body;
+  const token = crypto.randomBytes(32).toString('hex');
+  const result = db.prepare('INSERT INTO tokens (token, label) VALUES (?, ?)').run(token, (label || 'Token').trim());
+  res.json({ id: result.lastInsertRowid, token, label: (label || 'Token').trim() });
+});
+
+app.delete('/api/tokens/:id', (req, res) => {
+  if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
+  db.prepare('DELETE FROM tokens WHERE id = ?').run(parseInt(req.params.id));
+  res.json({ ok: true });
+});
+
+// ── Pages ─────────────────────────────────────────────────────
+app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.get(`/${CONFIG.secretPath}/admin`, (req, res) => {
+app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
@@ -875,7 +1022,7 @@ app.use((req, res) => res.status(404).send('Not found'));
 
 app.listen(CONFIG.port, () => {
   console.log(`\n🚀 TraceMap démarré sur le port ${CONFIG.port}`);
-  console.log(`🔗 URL: http://mesh.jscheunersarl.ch/${CONFIG.secretPath}`);
+  console.log(`🔗 URL admin: http://mesh.jscheunersarl.ch/admin`);
   console.log(`🔒 Mot de passe: ${CONFIG.webPassword}\n`);
 });
 

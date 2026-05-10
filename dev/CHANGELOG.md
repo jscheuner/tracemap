@@ -3,6 +3,17 @@
 ## [En cours]
 
 ### Ajouté
+- **Authentification par tokens persistants** : remplace la sécurité par URL secrète
+  - URL admin simplifiée : `https://mesh.jscheunersarl.ch/admin` (plus de chemin secret)
+  - Table `tokens` en DB : token 64 chars hex, label, date de création, sans expiration
+  - `isAuthenticated()` vérifie les sessions en mémoire OU les tokens DB
+  - Gestion des tokens dans ⚙️ Paramètres : créer (label + QR), révoquer
+  - QR code par token → URL `https://.../admin?token=XXX` → sauvegarde automatique dans localStorage + nettoyage URL
+  - Token Traccar dédié (`traccarToken` dans settings) généré au démarrage, indépendant des tokens admin
+  - Traccar URL mise à jour avec le token dédié dans la section Paramètres
+- **Regroupement des photos hors-rayon par proximité** : lors de l'import bulk `match_waypoints`, les photos `no_match` dans le rayon sont regroupées en un seul waypoint proposé. Affichage "📦 N photos groupées" côté client, création d'un waypoint + liaison automatique de toutes les photos du groupe.
+- **Filtre date appliqué aux waypoints sur la carte** : `getFilteredPositions()` filtre désormais les waypoints GPX par timestamp quand une période est active (cohérence carte ↔ sidebar)
+- **Lier les photos sans GPS à un waypoint existant** (`linkSelectedNoGpsPhotos`) : section dédiée dans le rapport d'import bulk, sélection du waypoint cible dans une liste déroulante, liaison par `POST /api/photos/create-waypoint` avec `position_id`
 - **Traccar Client** : remplace le phone-tracker navigateur
   - Endpoint `GET /api/traccar?id=&lat=&lon=&timestamp=&altitude=&speed=&accuracy=&batt=`
   - Lie les positions au tracé actif, source `phone_gps`
