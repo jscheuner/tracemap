@@ -451,6 +451,7 @@
     <div class="modal-actions" style="justify-content:space-between; position:sticky; bottom:-2rem; margin:-1px -2rem -2rem; background:#1e293b; padding:0.75rem 2rem 1.5rem; border-top:1px solid #334155; margin-top:1rem;">
       <button class="btn btn-danger" onclick="deleteWaypointFromModal()">Supprimer</button>
       <div style="display:flex;gap:0.75rem;">
+        <button id="wpt-modal-photos-btn" class="btn btn-ghost" onclick="openPhotoCarouselFromModal()" style="display:none;">📷 Photos</button>
         <button class="btn btn-ghost" onclick="closeWaypointEditModal()">Annuler</button>
         <button class="btn btn-primary" onclick="saveWaypoint()">Enregistrer</button>
       </div>
@@ -928,11 +929,21 @@
     } else {
       wptDescEditor.setText('');
     }
+    document.getElementById('wpt-modal-photos-btn').style.display = wptPhotoIds.has(id) ? '' : 'none';
     document.getElementById('wpt-edit-modal').classList.remove('hidden');
     setTimeout(() => document.getElementById('wpt-edit-name').select(), 50);
-    loadWaypointPhotos(id).then(photos => renderWaypointPhotos(photos, id));
+    loadWaypointPhotos(id).then(photos => {
+      renderWaypointPhotos(photos, id);
+      document.getElementById('wpt-modal-photos-btn').style.display = photos.length ? '' : 'none';
+    });
   }
   function closeWaypointEditModal() { document.getElementById('wpt-edit-modal').classList.add('hidden'); }
+
+  function openPhotoCarouselFromModal() {
+    const id = parseInt(document.getElementById('wpt-edit-id').value);
+    closeWaypointEditModal();
+    openPhotoCarousel(id);
+  }
 
   async function saveWaypoint() {
     const id = document.getElementById('wpt-edit-id').value;
