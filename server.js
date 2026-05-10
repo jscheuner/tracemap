@@ -49,6 +49,7 @@ function haversineMeters(lat1, lon1, lat2, lon2) {
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
 
 const db = new Database(CONFIG.dbPath);
 db.exec(`
@@ -598,10 +599,27 @@ app.post(`/${CONFIG.secretPath}/api/positions/ingest`, (req, res) => {
 // ── Traccar Client ───────────────────────────────────────────
 app.all(`/${CONFIG.secretPath}/api/traccar`, (req, res) => {
   const p = { ...req.query, ...req.body };
-  const { id, lat, lon, timestamp, altitude, speed, bearing, accuracy, hdop, batt } = p;
+
+  // Format imbriqué (Background Geolocation / transistorsoft)
+  let lat = p.lat, lon = p.lon, timestamp = p.timestamp;
+  let altitude = p.altitude, speed = p.speed, accuracy = p.accuracy || p.hdop;
+  let batt = p.batt;
+  let deviceId = (p.id || p.device_id || 'traccar').toString().substring(0, 64);
+
+  if (!lat && p.location && p.location.coords) {
+    const c = p.location.coords;
+    lat = c.latitude; lon = c.longitude;
+    altitude = c.altitude; speed = c.speed; accuracy = c.accuracy;
+    timestamp = p.location.timestamp;
+    if (!batt && p.location.battery) batt = Math.round(p.location.battery.level * 100);
+  }
+
   const latitude = parseFloat(lat);
   const longitude = parseFloat(lon);
-  if (!lat || !lon || isNaN(latitude) || isNaN(longitude)) return res.status(400).send('Missing or invalid lat/lon');
+  if (!lat || !lon || isNaN(latitude) || isNaN(longitude)) {
+    console.log(`📱 Traccar REJET lat=${lat} lon=${lon} body=${JSON.stringify(p).substring(0, 200)}`);
+    return res.status(400).send('Missing or invalid lat/lon');
+  }
 
   let ts;
   if (timestamp) {
@@ -612,8 +630,6 @@ app.all(`/${CONFIG.secretPath}/api/traccar`, (req, res) => {
   }
 
   const traceId = getCurrentTrace()?.id || ensureActiveTrace().id;
-  const deviceId = (id || 'traccar').substring(0, 64);
-  const acc = accuracy || hdop;
 
   db.prepare(`INSERT INTO positions (node_id, node_name, latitude, longitude, altitude, speed, battery, timestamp, trace_id, source)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'phone_gps')`).run(
