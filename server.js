@@ -743,8 +743,8 @@ app.post(`/api/photos/confirm`, (req, res) => {
 
 app.get(`/api/photos/summary`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
-  const rows = db.prepare('SELECT DISTINCT position_id FROM photos').all();
-  res.json(rows.map(r => r.position_id));
+  const rows = db.prepare('SELECT position_id, COUNT(*) as count FROM photos GROUP BY position_id').all();
+  res.json(rows.map(r => ({ id: r.position_id, count: r.count })));
 });
 
 app.get(`/api/photos/for-positions`, (req, res) => {

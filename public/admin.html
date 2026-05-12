@@ -924,13 +924,17 @@
           <span class="wpt-folder-arrow" id="wfa-${fid}" style="transform:rotate(${collapsed?'-90':'0'}deg)">▼</span>
         </div>
         <div class="wpt-folder-items${collapsed?' hidden':''}" id="wfi-${fid}">
-          ${sortedItems.map(w => `
+          ${sortedItems.map(w => {
+            const pc = wptPhotoIds.get(w.id);
+            return `
             <div class="wpt-item" onclick="centerOnWaypoint(${w.latitude},${w.longitude})">
               <span class="wpt-dot" style="background:${color}"></span>
               <span class="wpt-name">${escHtml(w.node_name || w.node_id)}</span>
+              ${pc ? `<span style="font-size:0.7rem;color:#fbbf24;background:rgba(120,53,15,0.5);border-radius:4px;padding:0 4px;flex-shrink:0;">📷${pc}</span>` : ''}
               <button class="rename-btn" onclick="event.stopPropagation();openWaypointEditModal(${w.id})">✏️</button>
               <button class="rename-btn" style="color:#ef4444" onclick="event.stopPropagation();deleteWaypoint(${w.id})">🗑️</button>
-            </div>`).join('')}
+            </div>`;
+          }).join('')}
         </div>
       </div>`;
     }).join('');
@@ -1205,12 +1209,12 @@
 
   // ── Photos ───────────────────────────────────────────────────
 
-  let wptPhotoIds = new Set();
+  let wptPhotoIds = new Map(); // position_id → count
 
   async function loadPhotoSummary() {
     try {
       const res = await fetch(`/api/photos/summary`, { headers: { 'x-session-token': sessionToken } });
-      if (res.ok) { wptPhotoIds = new Set(await res.json()); }
+      if (res.ok) { wptPhotoIds = new Map((await res.json()).map(r => [r.id, r.count])); }
     } catch {}
     updateMap();
   }
@@ -2297,15 +2301,15 @@
 
     wayptPts.forEach(p => {
       const color = catColorMap.get(p.node_id) || '#a855f7';
-      const hasPhotos = wptPhotoIds.has(p.id);
+      const photoCount = wptPhotoIds.get(p.id) || 0;
       const icon = L.divIcon({
         html: `<div style="position:relative;width:18px;height:18px;">
           <div style="background:${color};width:11px;height:11px;border-radius:2px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.5);transform:rotate(45deg);position:absolute;top:3px;left:3px;"></div>
-          ${hasPhotos ? '<div style="position:absolute;top:-10px;right:-10px;font-size:16px;line-height:1;">📷</div>' : ''}
+          ${photoCount ? `<div style="position:absolute;top:-14px;right:-14px;background:#78350f;color:#fbbf24;font-size:9px;font-weight:700;line-height:1;padding:1px 3px;border-radius:4px;white-space:nowrap;">📷${photoCount}</div>` : ''}
         </div>`,
         iconSize: [18, 18], iconAnchor: [9, 9]
       });
-      markers.push(L.marker([p.latitude,p.longitude],{icon}).addTo(map).bindPopup(buildWaypointPopup(p, color, hasPhotos)));
+      markers.push(L.marker([p.latitude,p.longitude],{icon}).addTo(map).bindPopup(buildWaypointPopup(p, color, !!photoCount)));
     });
 
     document.getElementById('status-text').textContent = 'En ligne';
