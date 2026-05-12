@@ -373,6 +373,8 @@
   <div id="dia-date" style="position:absolute;bottom:10px;left:16px;font-size:0.82rem;color:#cbd5e1;background:rgba(0,0,0,0.5);padding:0.2rem 0.55rem;border-radius:6px;z-index:3;pointer-events:none;"></div>
   <!-- Compteur overlay haut gauche -->
   <div id="dia-counter" style="position:absolute;top:16px;left:16px;font-size:0.85rem;color:#94a3b8;background:rgba(0,0,0,0.5);padding:0.2rem 0.5rem;border-radius:6px;z-index:3;"></div>
+  <!-- Bouton voir sur la carte (haut gauche, après compteur) -->
+  <button onclick="diaPauseForMap()" title="Voir ce point sur la carte" style="position:absolute;top:12px;left:90px;background:rgba(0,0,0,0.5);border:none;color:#94a3b8;font-size:0.82rem;cursor:pointer;padding:0.3rem 0.6rem;border-radius:6px;z-index:3;">📍 Carte</button>
   <!-- Boutons navigation -->
   <button onclick="diaNav(-1)" style="position:absolute;left:8px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.15);border:none;color:#e2e8f0;font-size:2rem;cursor:pointer;padding:0.6rem 0.9rem;border-radius:8px;z-index:3;line-height:1;">‹</button>
   <button onclick="diaNav(1)"  style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.15);border:none;color:#e2e8f0;font-size:2rem;cursor:pointer;padding:0.6rem 0.9rem;border-radius:8px;z-index:3;line-height:1;">›</button>
@@ -380,6 +382,9 @@
   <button id="dia-fs-btn" onclick="toggleDiaFullscreen()" title="Plein écran (F11)" style="position:absolute;top:12px;right:52px;background:rgba(0,0,0,0.5);border:none;color:#94a3b8;font-size:1.1rem;cursor:pointer;padding:0.3rem 0.5rem;border-radius:6px;z-index:3;">⛶</button>
   <button onclick="closeDiaporama()" style="position:absolute;top:12px;right:12px;background:rgba(0,0,0,0.5);border:none;color:#e2e8f0;font-size:1.4rem;cursor:pointer;padding:0.3rem 0.5rem;border-radius:6px;z-index:3;">✕</button>
 </div>
+
+<!-- Bouton flottant reprendre diaporama -->
+<div id="dia-resume-btn" class="hidden" style="position:fixed;bottom:32px;left:50%;transform:translateX(-50%);z-index:8000;background:#1e3a5f;border:1px solid #3b82f6;color:#93c5fd;border-radius:24px;padding:0.55rem 1.4rem;font-size:0.9rem;font-weight:600;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,0.5);white-space:nowrap;" onclick="diaResume()">▶ Reprendre le diaporama</div>
 
 <!-- Modal import photo en masse -->
 <div id="photo-import-modal" class="modal-overlay hidden" onclick="if(event.target===this)closePhotoImportModal()">
@@ -1636,6 +1641,25 @@
   function closeDiaporama() {
     if (document.fullscreenElement) document.exitFullscreen();
     document.getElementById('dia-modal').classList.add('hidden');
+    document.getElementById('dia-resume-btn').classList.add('hidden');
+    diaPhotos = [];
+    diaIdx = 0;
+  }
+
+  function diaPauseForMap() {
+    if (document.fullscreenElement) document.exitFullscreen();
+    const p = diaPhotos[diaIdx];
+    if (!p) return;
+    document.getElementById('dia-modal').classList.add('hidden');
+    document.getElementById('dia-resume-btn').classList.remove('hidden');
+    if (p.latitude && p.longitude) {
+      map.setView([p.latitude, p.longitude], Math.max(map.getZoom(), 15));
+    }
+  }
+
+  function diaResume() {
+    document.getElementById('dia-resume-btn').classList.add('hidden');
+    document.getElementById('dia-modal').classList.remove('hidden');
   }
 
   function toggleDiaFullscreen() {

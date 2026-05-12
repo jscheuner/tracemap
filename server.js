@@ -754,7 +754,8 @@ app.get(`/api/photos/for-positions`, (req, res) => {
   const placeholders = ids.map(() => '?').join(',');
   const rows = db.prepare(`
     SELECT ph.id, ph.filepath, ph.original_name, ph.created_at,
-           pos.node_name, pos.node_id, pos.timestamp, pos.id AS position_id
+           pos.node_name, pos.node_id, pos.timestamp, pos.id AS position_id,
+           pos.latitude, pos.longitude
     FROM photos ph
     JOIN positions pos ON pos.id = ph.position_id
     WHERE ph.position_id IN (${placeholders})
