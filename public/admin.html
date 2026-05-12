@@ -246,6 +246,7 @@
       .modal-box { padding: 1.25rem; border-radius: 12px; }
     }
   @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes dia-pulse { 0%{transform:translate(-50%,-50%) scale(1);opacity:1} 100%{transform:translate(-50%,-50%) scale(2.5);opacity:0} }
   </style>
 </head>
 <body>
@@ -1574,6 +1575,7 @@
 
   let diaPhotos = [];
   let diaIdx = 0;
+  let _diaHighlightMarker = null;
 
   async function openDiaporama() {
     const filtered = getFilteredPositions();
@@ -1638,10 +1640,15 @@
     renderDia();
   }
 
+  function _removeDiaHighlight() {
+    if (_diaHighlightMarker) { map.removeLayer(_diaHighlightMarker); _diaHighlightMarker = null; }
+  }
+
   function closeDiaporama() {
     if (document.fullscreenElement) document.exitFullscreen();
     document.getElementById('dia-modal').classList.add('hidden');
     document.getElementById('dia-resume-btn').classList.add('hidden');
+    _removeDiaHighlight();
     diaPhotos = [];
     diaIdx = 0;
   }
@@ -1653,12 +1660,19 @@
     document.getElementById('dia-modal').classList.add('hidden');
     document.getElementById('dia-resume-btn').classList.remove('hidden');
     if (p.latitude && p.longitude) {
-      map.setView([p.latitude, p.longitude], Math.max(map.getZoom(), 15));
+      map.setView([p.latitude, p.longitude], Math.max(map.getZoom(), 16));
+      _removeDiaHighlight();
+      const hlIcon = L.divIcon({
+        html: `<div style="position:absolute;top:50%;left:50%;width:32px;height:32px;border-radius:50%;border:3px solid #facc15;box-shadow:0 0 0 0 rgba(250,204,21,0.7);animation:dia-pulse 1.2s ease-out infinite;"></div>`,
+        iconSize: [0, 0], iconAnchor: [0, 0], className: ''
+      });
+      _diaHighlightMarker = L.marker([p.latitude, p.longitude], { icon: hlIcon, interactive: false, zIndexOffset: 2000 }).addTo(map);
     }
   }
 
   function diaResume() {
     document.getElementById('dia-resume-btn').classList.add('hidden');
+    _removeDiaHighlight();
     document.getElementById('dia-modal').classList.remove('hidden');
   }
 
