@@ -3,10 +3,19 @@
 ## [En cours]
 
 ### Ajouté
+- **Diaporama de photos** : vue plein écran de toutes les photos des points/tracés visibles selon les filtres actifs
+  - Bouton `🎞️` dans la toolbar
+  - Navigation molette + flèches clavier + boutons ‹ ›
+  - Compteur overlay haut gauche, légende (nom waypoint, dossier, date) en overlay bas
+  - Chargement progressif avec spinner — le compteur et la légende ne changent qu'après chargement de l'image (style streaming vidéo)
+  - Préchargement des photos voisines (±2) en arrière-plan
+  - Support plein écran (F11 + bouton ⛶)
+  - Route `GET /api/photos/for-positions?ids=...` pour récupérer les photos en lot
+- **Plein écran carousel waypoint** : bouton ⛶ + F11, image `object-fit:contain` pour respecter les proportions
 - **Authentification par tokens persistants** : remplace la sécurité par URL secrète
   - URL admin simplifiée : `https://mesh.jscheunersarl.ch/admin` (plus de chemin secret)
   - Table `tokens` en DB : token 64 chars hex, label, date de création, sans expiration
-  - `isAuthenticated()` vérifie les sessions en mémoire OU les tokens DB
+  - `isAuthenticated()` vérifie uniquement les tokens DB (sessions mémoire supprimées)
   - Gestion des tokens dans ⚙️ Paramètres : créer (label + QR), révoquer
   - QR code par token → URL `https://.../admin?token=XXX` → sauvegarde automatique dans localStorage + nettoyage URL
   - Token Traccar dédié (`traccarToken` dans settings) généré au démarrage, indépendant des tokens admin
@@ -47,6 +56,11 @@
   - Timeout 8 s sur l'extraction EXIF pour éviter les blocages
 - Bouton "📍 Utiliser ma position actuelle" dans le picker photo quand aucun GPS n'est trouvé (contournement Google Photos qui supprime l'EXIF) — pré-sélectionne le waypoint le plus proche et colorise selon la distance
 - Packages : `exifr`, `multer`
+
+### Corrigé
+- **Spinner diagonal** dans le carousel waypoint et le diaporama : conflit `transform:translate` (centrage) + `animation:spin` (rotate). Résolu par un div externe pour le translate et un div interne pour la rotation.
+- **QR modal masqué** derrière la modale Paramètres : z-index porté à 9200.
+- **Token non retourné** par `GET /api/tokens` → `SELECT` étendu, `_tokenCache` populé dans `loadTokens()`.
 
 ### Modifié
 - Liste déroulante "Dossier / Catégorie" dans le modal d'édition waypoint (catégories existantes + "✏️ Autre dossier…")

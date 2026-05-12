@@ -245,6 +245,7 @@
       /* Modals */
       .modal-box { padding: 1.25rem; border-radius: 12px; }
     }
+  @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
@@ -335,15 +336,47 @@
 </div>
 
 <!-- Modal carrousel photos -->
-<div id="carousel-modal" class="modal-overlay hidden" onclick="closeCarouselOutside(event)" style="background:rgba(0,0,0,0.9);">
-  <button onclick="closeCarousel()" style="position:fixed;top:16px;right:20px;background:none;border:none;color:#e2e8f0;font-size:1.6rem;cursor:pointer;z-index:1;">✕</button>
-  <button onclick="carouselPrev()" style="position:fixed;left:12px;background:rgba(255,255,255,0.1);border:none;color:#e2e8f0;font-size:1.8rem;cursor:pointer;padding:0.5rem 0.75rem;border-radius:8px;z-index:1;">‹</button>
-  <div style="display:flex;flex-direction:column;align-items:center;gap:0.75rem;max-width:95vw;max-height:95vh;">
-    <img id="carousel-img" src="" style="max-width:90vw;max-height:82vh;object-fit:contain;border-radius:8px;" onclick="event.stopPropagation()"/>
-    <div id="carousel-counter" style="font-size:0.85rem;color:#94a3b8;"></div>
-    <div id="carousel-name" style="font-size:0.9rem;color:#e2e8f0;"></div>
+<div id="carousel-modal" class="modal-overlay hidden" onclick="closeCarouselOutside(event)" style="background:#000;padding:0;">
+  <!-- Image plein espace -->
+  <img id="carousel-img" src="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;"/>
+  <!-- Spinner : div externe pour le translate, div interne pour la rotation -->
+  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:4;width:40px;height:40px;">
+    <div id="carousel-spinner" style="display:none;width:100%;height:100%;border:3px solid #334155;border-top-color:#3b82f6;border-radius:50%;animation:spin 0.7s linear infinite;"></div>
   </div>
-  <button onclick="carouselNext()" style="position:fixed;right:12px;background:rgba(255,255,255,0.1);border:none;color:#e2e8f0;font-size:1.8rem;cursor:pointer;padding:0.5rem 0.75rem;border-radius:8px;z-index:1;">›</button>
+  <!-- Légende overlay bas -->
+  <div style="position:absolute;bottom:0;left:0;right:0;padding:1rem 5rem 1rem 1rem;background:linear-gradient(transparent,rgba(0,0,0,0.75));z-index:2;pointer-events:none;">
+    <div id="carousel-name" style="font-size:1rem;color:#f1f5f9;font-weight:500;"></div>
+  </div>
+  <!-- Compteur overlay haut gauche -->
+  <div id="carousel-counter" style="position:absolute;top:16px;left:16px;font-size:0.85rem;color:#94a3b8;background:rgba(0,0,0,0.5);padding:0.2rem 0.5rem;border-radius:6px;z-index:3;"></div>
+  <!-- Navigation -->
+  <button onclick="carouselPrev()" style="position:absolute;left:8px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.15);border:none;color:#e2e8f0;font-size:2rem;cursor:pointer;padding:0.6rem 0.9rem;border-radius:8px;z-index:3;line-height:1;">‹</button>
+  <button onclick="carouselNext()" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.15);border:none;color:#e2e8f0;font-size:2rem;cursor:pointer;padding:0.6rem 0.9rem;border-radius:8px;z-index:3;line-height:1;">›</button>
+  <!-- Boutons haut droite -->
+  <button id="carousel-fs-btn" onclick="toggleCarouselFullscreen()" title="Plein écran (F11)" style="position:absolute;top:12px;right:52px;background:rgba(0,0,0,0.5);border:none;color:#94a3b8;font-size:1.1rem;cursor:pointer;padding:0.3rem 0.5rem;border-radius:6px;z-index:3;">⛶</button>
+  <button onclick="closeCarousel()" style="position:absolute;top:12px;right:12px;background:rgba(0,0,0,0.5);border:none;color:#e2e8f0;font-size:1.4rem;cursor:pointer;padding:0.3rem 0.5rem;border-radius:6px;z-index:3;">✕</button>
+</div>
+
+<!-- Modal Diaporama -->
+<div id="dia-modal" class="modal-overlay hidden" style="background:#000;z-index:9300;padding:0;">
+  <!-- Image plein espace -->
+  <img id="dia-img" src="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;"/>
+  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:4;width:48px;height:48px;">
+    <div id="dia-spinner" style="display:none;width:100%;height:100%;border:3px solid #334155;border-top-color:#3b82f6;border-radius:50%;animation:spin 0.7s linear infinite;"></div>
+  </div>
+  <!-- Légende overlay bas -->
+  <div style="position:absolute;bottom:0;left:0;right:0;padding:1rem 5rem 1rem 1rem;background:linear-gradient(transparent,rgba(0,0,0,0.75));text-align:left;z-index:2;pointer-events:none;">
+    <div id="dia-name" style="font-size:1rem;color:#f1f5f9;font-weight:500;"></div>
+    <div id="dia-meta" style="font-size:0.8rem;color:#94a3b8;margin-top:0.15rem;"></div>
+  </div>
+  <!-- Compteur overlay haut gauche -->
+  <div id="dia-counter" style="position:absolute;top:16px;left:16px;font-size:0.85rem;color:#94a3b8;background:rgba(0,0,0,0.5);padding:0.2rem 0.5rem;border-radius:6px;z-index:3;"></div>
+  <!-- Boutons navigation -->
+  <button onclick="diaNav(-1)" style="position:absolute;left:8px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.15);border:none;color:#e2e8f0;font-size:2rem;cursor:pointer;padding:0.6rem 0.9rem;border-radius:8px;z-index:3;line-height:1;">‹</button>
+  <button onclick="diaNav(1)"  style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.15);border:none;color:#e2e8f0;font-size:2rem;cursor:pointer;padding:0.6rem 0.9rem;border-radius:8px;z-index:3;line-height:1;">›</button>
+  <!-- Boutons haut droite -->
+  <button id="dia-fs-btn" onclick="toggleDiaFullscreen()" title="Plein écran (F11)" style="position:absolute;top:12px;right:52px;background:rgba(0,0,0,0.5);border:none;color:#94a3b8;font-size:1.1rem;cursor:pointer;padding:0.3rem 0.5rem;border-radius:6px;z-index:3;">⛶</button>
+  <button onclick="closeDiaporama()" style="position:absolute;top:12px;right:12px;background:rgba(0,0,0,0.5);border:none;color:#e2e8f0;font-size:1.4rem;cursor:pointer;padding:0.3rem 0.5rem;border-radius:6px;z-index:3;">✕</button>
 </div>
 
 <!-- Modal import photo en masse -->
@@ -421,7 +454,7 @@
 </div>
 
 <!-- Modal QR -->
-<div id="qr-modal" class="modal-overlay hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+<div id="qr-modal" class="modal-overlay hidden" style="z-index:9200;" onclick="if(event.target===this)this.classList.add('hidden')">
   <div class="modal-box" style="text-align:center">
     <h3 id="qr-modal-title">Accès Admin</h3>
     <p id="qr-modal-desc" style="color:#94a3b8; font-size:0.85rem; margin-bottom:1.25rem;">Scannez ce QR code avec votre téléphone pour sauvegarder le token d'accès.</p>
@@ -637,6 +670,7 @@
         <button class="btn btn-ghost" onclick="openGPXModal()" title="Importer un GPX dans la base">↑ Import</button>
         <button class="btn btn-ghost" onclick="openGPXOverlayModal()" title="Afficher un GPX en superposition temporaire">Import temporaire</button>
         <button class="btn btn-ghost" onclick="openPhotoImportModal()" title="Importer une photo et la lier à un waypoint">📷 Photo</button>
+        <button class="btn btn-ghost" onclick="openDiaporama()" title="Diaporama des photos visibles sur la carte">🎞️</button>
         <button class="btn btn-ghost" onclick="openPhoneQR()">QR</button>
         <button class="btn btn-ghost btn-icon" onclick="openSettingsModal()" title="Paramètres">⚙️</button>
       </div>
@@ -1438,6 +1472,21 @@
     if (linked) { loadPositions(); loadPhotoSummary(); }
   }
 
+  // ── Cache de préchargement partagé (carrousel + diaporama) ──
+  const _photoPreloadCache = new Map();
+  function _preloadUrl(url) {
+    if (_photoPreloadCache.has(url)) return;
+    const img = new Image(); img.src = url;
+    _photoPreloadCache.set(url, img);
+  }
+  function _isPreloaded(url) {
+    const img = _photoPreloadCache.get(url);
+    return img && img.complete && img.naturalWidth > 0;
+  }
+  function _photoUrl(filepath) {
+    return `/photos/${filepath.replace(/\\/g,'/')}?token=${sessionToken}`;
+  }
+
   // ── Carrousel photos ─────────────────────────────────────────
 
   let carouselPhotos = [];
@@ -1453,18 +1502,144 @@
 
   function renderCarousel() {
     const p = carouselPhotos[carouselIdx];
-    const url = `/photos/${p.filepath.replace(/\\/g,'/')}?token=${sessionToken}`;
-    document.getElementById('carousel-img').src = url;
-    document.getElementById('carousel-counter').textContent = `${carouselIdx + 1} / ${carouselPhotos.length}`;
-    document.getElementById('carousel-name').textContent = p.original_name || '';
+    const url = _photoUrl(p.filepath);
+    const imgEl = document.getElementById('carousel-img');
+    const spinner = document.getElementById('carousel-spinner');
+
+    // Préchargement des voisins
+    [-2,-1,1,2].forEach(d => {
+      const nb = carouselPhotos[(carouselIdx + d + carouselPhotos.length) % carouselPhotos.length];
+      if (nb) _preloadUrl(_photoUrl(nb.filepath));
+    });
+
+    if (_isPreloaded(url)) {
+      // Déjà en cache → affichage instantané
+      imgEl.src = url;
+      spinner.style.display = 'none';
+      document.getElementById('carousel-counter').textContent = `${carouselIdx + 1} / ${carouselPhotos.length}`;
+      document.getElementById('carousel-name').textContent = p.original_name || '';
+    } else {
+      // Pas encore chargée → spinner + attente
+      spinner.style.display = 'block';
+      imgEl.style.opacity = '0.2';
+      const loader = new Image();
+      loader.onload = () => {
+        _photoPreloadCache.set(url, loader);
+        imgEl.src = url;
+        imgEl.style.opacity = '1';
+        spinner.style.display = 'none';
+        document.getElementById('carousel-counter').textContent = `${carouselIdx + 1} / ${carouselPhotos.length}`;
+        document.getElementById('carousel-name').textContent = p.original_name || '';
+      };
+      loader.onerror = () => { spinner.style.display = 'none'; imgEl.style.opacity = '1'; };
+      loader.src = url;
+    }
     document.querySelectorAll('#carousel-modal button[onclick^="carouselPrev"], #carousel-modal button[onclick^="carouselNext"]')
       .forEach(b => b.style.opacity = carouselPhotos.length > 1 ? '1' : '0.2');
   }
 
   function carouselPrev() { carouselIdx = (carouselIdx - 1 + carouselPhotos.length) % carouselPhotos.length; renderCarousel(); }
   function carouselNext() { carouselIdx = (carouselIdx + 1) % carouselPhotos.length; renderCarousel(); }
-  function closeCarousel() { document.getElementById('carousel-modal').classList.add('hidden'); }
+  function closeCarousel() {
+    if (document.fullscreenElement) document.exitFullscreen();
+    document.getElementById('carousel-modal').classList.add('hidden');
+  }
   function closeCarouselOutside(e) { if (e.target === document.getElementById('carousel-modal')) closeCarousel(); }
+
+  function toggleCarouselFullscreen() {
+    const el = document.getElementById('carousel-modal');
+    if (!document.fullscreenElement) el.requestFullscreen().catch(() => {});
+    else document.exitFullscreen();
+  }
+
+  document.addEventListener('fullscreenchange', () => {
+    const carBtn = document.getElementById('carousel-fs-btn');
+    const diaBtn = document.getElementById('dia-fs-btn');
+    const isFs = !!document.fullscreenElement;
+    if (carBtn) carBtn.textContent = isFs ? '✕⛶' : '⛶';
+    if (diaBtn) diaBtn.textContent = isFs ? '✕⛶' : '⛶';
+  });
+
+  // ── Diaporama ─────────────────────────────────────────────────
+
+  let diaPhotos = [];
+  let diaIdx = 0;
+
+  async function openDiaporama() {
+    const filtered = getFilteredPositions();
+    const withPhotos = filtered.filter(p => wptPhotoIds.has(p.id));
+    if (!withPhotos.length) { alert('Aucune photo sur les points visibles.'); return; }
+    const ids = withPhotos.map(p => p.id).join(',');
+    const res = await fetch(`/api/photos/for-positions?ids=${ids}`, { headers: { 'x-session-token': sessionToken } });
+    if (!res.ok) return;
+    diaPhotos = await res.json();
+    if (!diaPhotos.length) { alert('Aucune photo trouvée.'); return; }
+    diaIdx = 0;
+    renderDia();
+    document.getElementById('dia-modal').classList.remove('hidden');
+  }
+
+  function renderDia() {
+    const p = diaPhotos[diaIdx];
+    const url = _photoUrl(p.filepath);
+    const imgEl = document.getElementById('dia-img');
+    const spinner = document.getElementById('dia-spinner');
+
+    // Préchargement des voisins
+    [-2,-1,1,2,3].forEach(d => {
+      const idx = diaIdx + d;
+      if (idx >= 0 && idx < diaPhotos.length) _preloadUrl(_photoUrl(diaPhotos[idx].filepath));
+    });
+
+    // Mise à jour des métadonnées uniquement après chargement
+    const updateMeta = () => {
+      document.getElementById('dia-counter').textContent = `${diaIdx + 1} / ${diaPhotos.length}`;
+      document.getElementById('dia-name').textContent = p.original_name || p.node_name || '—';
+      const folder = p.node_id ? `📁 ${p.node_id}` : '';
+      const date = p.timestamp ? new Date(p.timestamp * 1000).toLocaleDateString('fr-CH', { day:'2-digit', month:'2-digit', year:'numeric' }) : '';
+      document.getElementById('dia-meta').textContent = [folder, date].filter(Boolean).join('  ·  ');
+    };
+
+    if (_isPreloaded(url)) {
+      imgEl.src = url;
+      spinner.style.display = 'none';
+      imgEl.style.opacity = '1';
+      updateMeta();
+    } else {
+      spinner.style.display = 'block';
+      imgEl.style.opacity = '0.1';
+      const loader = new Image();
+      loader.onload = () => {
+        _photoPreloadCache.set(url, loader);
+        imgEl.src = url;
+        imgEl.style.opacity = '1';
+        spinner.style.display = 'none';
+        updateMeta();
+      };
+      loader.onerror = () => { spinner.style.display = 'none'; imgEl.style.opacity = '1'; updateMeta(); };
+      loader.src = url;
+    }
+  }
+
+  function diaNav(delta) {
+    if (!diaPhotos.length) return;
+    diaIdx = (diaIdx + delta + diaPhotos.length) % diaPhotos.length;
+    renderDia();
+  }
+
+  function closeDiaporama() {
+    if (document.fullscreenElement) document.exitFullscreen();
+    document.getElementById('dia-modal').classList.add('hidden');
+  }
+
+  function toggleDiaFullscreen() {
+    const el = document.getElementById('dia-modal');
+    if (!document.fullscreenElement) {
+      el.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen();
+    }
+  }
 
   // ── Quill rich text editor (waypoint description) ─────────────
   let wptDescEditor = null;
@@ -1597,11 +1772,24 @@
       e.preventDefault();
       if (e.deltaY > 0) carouselNext(); else carouselPrev();
     }, { passive: false });
+    document.getElementById('dia-modal').addEventListener('wheel', e => {
+      e.preventDefault();
+      if (e.deltaY > 0) diaNav(1); else diaNav(-1);
+    }, { passive: false });
     document.addEventListener('keydown', e => {
-      if (document.getElementById('carousel-modal').classList.contains('hidden')) return;
-      if (e.key === 'Escape') closeCarousel();
-      else if (e.key === 'ArrowRight') carouselNext();
-      else if (e.key === 'ArrowLeft') carouselPrev();
+      const diaOpen = !document.getElementById('dia-modal').classList.contains('hidden');
+      const carOpen = !document.getElementById('carousel-modal').classList.contains('hidden');
+      if (diaOpen) {
+        if (e.key === 'Escape') { closeDiaporama(); e.preventDefault(); }
+        else if (e.key === 'F11') { e.preventDefault(); toggleDiaFullscreen(); }
+        else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') diaNav(1);
+        else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') diaNav(-1);
+      } else if (carOpen) {
+        if (e.key === 'Escape') { closeCarousel(); e.preventDefault(); }
+        else if (e.key === 'F11') { e.preventDefault(); toggleCarouselFullscreen(); }
+        else if (e.key === 'ArrowRight') carouselNext();
+        else if (e.key === 'ArrowLeft') carouselPrev();
+      }
     });
   });
 
@@ -1872,6 +2060,7 @@
       list.innerHTML = '<div style="font-size:0.8rem;color:#475569;">Aucun token — créez-en un ci-dessous.</div>';
       return;
     }
+    tokens.forEach(t => { _tokenCache[t.id] = t.token; _tokenCache[t.id + '_label'] = t.label; });
     list.innerHTML = tokens.map(t => `
       <div style="display:flex;align-items:center;gap:0.5rem;padding:0.35rem 0;border-bottom:1px solid #1e293b;">
         <div style="flex:1;">
@@ -2561,7 +2750,7 @@
   }
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeTraceModal(); closeGPXModal(); closeGPXOverlayModal(); closeDeleteModal(); closeDetailsModal(); closeSettingsModal(); closeWaypointEditModal(); document.getElementById('qr-modal').classList.add('hidden'); }
+    if (e.key === 'Escape') { closeTraceModal(); closeGPXModal(); closeGPXOverlayModal(); closeDeleteModal(); closeDetailsModal(); closeSettingsModal(); closeWaypointEditModal(); closeDiaporama(); document.getElementById('qr-modal').classList.add('hidden'); }
     if (e.key === 'Enter' && !document.getElementById('trace-modal').classList.contains('hidden')) confirmNewTrace();
   });
 

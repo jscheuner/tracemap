@@ -747,6 +747,22 @@ app.get(`/api/photos/summary`, (req, res) => {
   res.json(rows.map(r => r.position_id));
 });
 
+app.get(`/api/photos/for-positions`, (req, res) => {
+  if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
+  const ids = (req.query.ids || '').split(',').map(Number).filter(n => n > 0);
+  if (!ids.length) return res.json([]);
+  const placeholders = ids.map(() => '?').join(',');
+  const rows = db.prepare(`
+    SELECT ph.id, ph.filepath, ph.original_name, ph.created_at,
+           pos.node_name, pos.node_id, pos.timestamp, pos.id AS position_id
+    FROM photos ph
+    JOIN positions pos ON pos.id = ph.position_id
+    WHERE ph.position_id IN (${placeholders})
+    ORDER BY pos.timestamp ASC, ph.id ASC
+  `).all(...ids);
+  res.json(rows);
+});
+
 app.get(`/api/photos`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const { position_id, trace_id } = req.query;
@@ -993,7 +1009,7 @@ app.delete(`/api/photos/:id`, (req, res) => {
 // ── Gestion des tokens persistants ───────────────────────────
 app.get('/api/tokens', (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
-  const rows = db.prepare('SELECT id, label, created_at FROM tokens ORDER BY created_at DESC').all();
+  const rows = db.prepare('SELECT id, token, label, created_at FROM tokens ORDER BY created_at DESC').all();
   res.json(rows);
 });
 
