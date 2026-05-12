@@ -670,10 +670,14 @@
         <button class="btn btn-ghost" onclick="openGPXModal()" title="Importer un GPX dans la base">↑ Import</button>
         <button class="btn btn-ghost" onclick="openGPXOverlayModal()" title="Afficher un GPX en superposition temporaire">Import temporaire</button>
         <button class="btn btn-ghost" onclick="openPhotoImportModal()" title="Importer une photo et la lier à un waypoint">📷 Photo</button>
-        <button class="btn btn-ghost" onclick="openDiaporama()" title="Diaporama des photos visibles sur la carte">🎞️</button>
         <button class="btn btn-ghost" onclick="openPhoneQR()">QR</button>
         <button class="btn btn-ghost btn-icon" onclick="openSettingsModal()" title="Paramètres">⚙️</button>
       </div>
+    </div>
+
+    <!-- Barre diaporama -->
+    <div style="background:#131e2e;padding:0.2rem 1rem;border-bottom:1px solid #1e2d40;display:flex;align-items:center;gap:0.5rem;flex-shrink:0;">
+      <button class="btn btn-ghost" style="font-size:0.82rem;padding:0.2rem 0.65rem;" onclick="openDiaporama()" title="Diaporama des photos visibles sur la carte">🎞️ Diaporama</button>
     </div>
 
     <!-- Filter bar -->
@@ -1572,7 +1576,7 @@
     const ids = withPhotos.map(p => p.id).join(',');
     const res = await fetch(`/api/photos/for-positions?ids=${ids}`, { headers: { 'x-session-token': sessionToken } });
     if (!res.ok) return;
-    diaPhotos = await res.json();
+    diaPhotos = (await res.json()).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
     if (!diaPhotos.length) { alert('Aucune photo trouvée.'); return; }
     diaIdx = 0;
     renderDia();
