@@ -245,6 +245,15 @@
       /* Modals */
       .modal-box { padding: 1.25rem; border-radius: 12px; }
     }
+  /* Flatpickr — pré-filtres */
+  .fp-prefilter { padding: 0.4rem 0.6rem 0.35rem; border-bottom: 1px solid #334155; background: #0f172a; }
+  .fp-pf-label { font-size: 0.62rem; color: #475569; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 0.2rem; margin-top: 0.25rem; }
+  .fp-pf-row { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+  .fp-pf-chip { background: transparent; border: 1px solid #334155; border-radius: 10px; color: #94a3b8; font-size: 0.72rem; padding: 0.1rem 0.5rem; cursor: pointer; line-height: 1.5; transition: all 0.1s; }
+  .fp-pf-chip:hover { background: #1e3a5f; border-color: #3b82f6; color: #93c5fd; }
+  /* Flatpickr — indicateurs jours */
+  .flatpickr-day { position: relative !important; }
+  .fp-day-dots { position: absolute; bottom: 3px; left: 0; right: 0; display: flex; justify-content: center; gap: 2px; pointer-events: none; line-height: 1; }
   @keyframes spin { to { transform: rotate(360deg); } }
   @keyframes dia-pulse { 0%{transform:translate(-50%,-50%) scale(1);opacity:1} 100%{transform:translate(-50%,-50%) scale(2.5);opacity:0} }
   </style>
@@ -787,7 +796,7 @@
     document.getElementById('header').classList.remove('hidden');
     document.getElementById('app-body').classList.remove('hidden');
     if (window.innerWidth <= 680) document.getElementById('sidebar').classList.add('collapsed');
-    initMap(); initDateRangePicker(); loadTraces(); loadPositions(); loadPhotoSummary(); startAutoRefresh();
+    initMap(); initDateRangePicker(); loadTraces(); loadPositions(); loadPhotoSummary(); loadCalendarSummary(); startAutoRefresh();
   }
 
   async function checkSession() {
@@ -2174,6 +2183,57 @@
   let dateRangeFrom = null;
   let dateRangeTo = null;
   let detailStartPicker = null, detailEndPicker = null, wptDatePicker = null;
+  let _calWptDays = new Set(), _calGpsDays = new Set(), _calPhotoDays = new Set();
+
+  async function loadCalendarSummary() {
+    try {
+      const res = await fetch('/api/calendar-summary', { headers: { 'x-session-token': sessionToken } });
+      if (!res.ok) return;
+      const data = await res.json();
+      _calWptDays   = new Set(data.wpt);
+      _calGpsDays   = new Set(data.gps);
+      _calPhotoDays = new Set(data.photo);
+    } catch {}
+  }
+
+  function applyDatePreset(year, month) {
+    let from, to;
+    if (month === 0) {
+      from = new Date(year, 0, 1);
+      to   = new Date(year, 11, 31);
+    } else {
+      from = new Date(year, month - 1, 1);
+      to   = new Date(year, month, 0);
+    }
+    dateRangeFrom = from;
+    dateRangeTo   = to;
+    dateRangePicker.setDate([from, to], false);
+    document.getElementById('date-clear-btn').style.display = '';
+    dateRangePicker.close();
+    loadPositions();
+  }
+
+  function buildCalendarPrefilters(calendarEl) {
+    const old = calendarEl.querySelector('.fp-prefilter');
+    if (old) old.remove();
+    const allDays = new Set([..._calWptDays, ..._calGpsDays]);
+    if (!allDays.size) return;
+    const yearSet = new Set(), ymSet = new Set();
+    allDays.forEach(d => { yearSet.add(d.slice(0, 4)); ymSet.add(d.slice(0, 7)); });
+    const years = [...yearSet].sort();
+    const yms   = [...ymSet].sort();
+    const mNames = ['jan.','fév.','mar.','avr.','mai','jun.','jul.','aoû.','sep.','oct.','nov.','déc.'];
+    const div = document.createElement('div');
+    div.className = 'fp-prefilter';
+    div.innerHTML =
+      `<div class="fp-pf-label">Année</div><div class="fp-pf-row">${years.map(y =>
+        `<button class="fp-pf-chip" onclick="applyDatePreset(${y},0)">${y}</button>`).join('')}</div>` +
+      `<div class="fp-pf-label">Mois</div><div class="fp-pf-row">${yms.map(ym => {
+        const [y, m] = ym.split('-');
+        return `<button class="fp-pf-chip" onclick="applyDatePreset(${+y},${+m})">${mNames[+m-1]} ${y}</button>`;
+      }).join('')}</div>`;
+    calendarEl.insertBefore(div, calendarEl.firstChild);
+  }
 
   function initDetailDatePickers() {
     const fpOpts = { locale: 'fr', dateFormat: 'd.m.Y', disableMobile: true };
@@ -2211,6 +2271,27 @@
         } else {
           document.getElementById('date-clear-btn').style.display = 'none';
         }
+      },
+      onDayCreate: function(selectedDates, dateStr, fp, dayElem) {
+        const d = dayElem.dateObj;
+        if (!d) return;
+        const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const hasGps   = _calGpsDays.has(key);
+        const hasWpt   = _calWptDays.has(key);
+        const hasPhoto = _calPhotoDays.has(key);
+        if (!hasGps && !hasWpt && !hasPhoto) return;
+        const dots = document.createElement('div');
+        dots.className = 'fp-day-dots';
+        if (hasGps)   dots.innerHTML += '<span style="width:4px;height:4px;border-radius:50%;background:#3b82f6;display:inline-block;flex-shrink:0;"></span>';
+        if (hasWpt)   dots.innerHTML += '<span style="width:4px;height:4px;border-radius:1px;background:#a855f7;transform:rotate(45deg);display:inline-block;flex-shrink:0;"></span>';
+        if (hasPhoto) dots.innerHTML += '<span style="font-size:7px;line-height:1;display:inline-block;">📷</span>';
+        dayElem.appendChild(dots);
+      },
+      onOpen: function(selectedDates, dateStr, fp) {
+        buildCalendarPrefilters(fp.calendarContainer);
+      },
+      onReady: function(selectedDates, dateStr, fp) {
+        buildCalendarPrefilters(fp.calendarContainer);
       }
     });
   }

@@ -747,6 +747,15 @@ app.get(`/api/photos/summary`, (req, res) => {
   res.json(rows.map(r => ({ id: r.position_id, count: r.count })));
 });
 
+app.get(`/api/calendar-summary`, (req, res) => {
+  if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
+  const fmt = "strftime('%Y-%m-%d', timestamp, 'unixepoch', 'localtime')";
+  const wpt   = db.prepare(`SELECT DISTINCT ${fmt} as d FROM positions WHERE source = 'gpx_waypoint' AND timestamp > 0`).all().map(r => r.d);
+  const gps   = db.prepare(`SELECT DISTINCT ${fmt} as d FROM positions WHERE source != 'gpx_waypoint' AND timestamp > 0`).all().map(r => r.d);
+  const photo = db.prepare(`SELECT DISTINCT strftime('%Y-%m-%d', pos.timestamp, 'unixepoch', 'localtime') as d FROM photos ph JOIN positions pos ON pos.id = ph.position_id WHERE pos.timestamp > 0`).all().map(r => r.d);
+  res.json({ wpt, gps, photo });
+});
+
 app.get(`/api/photos/for-positions`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const ids = (req.query.ids || '').split(',').map(Number).filter(n => n > 0);
