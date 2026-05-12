@@ -251,6 +251,9 @@
   .fp-pf-row { display: flex; flex-wrap: wrap; gap: 0.25rem; }
   .fp-pf-chip { background: transparent; border: 1px solid #334155; border-radius: 10px; color: #94a3b8; font-size: 0.72rem; padding: 0.1rem 0.5rem; cursor: pointer; line-height: 1.5; transition: all 0.1s; }
   .fp-pf-chip:hover { background: #1e3a5f; border-color: #3b82f6; color: #93c5fd; }
+  .fp-pf-nav { background: transparent; border: 1px solid #334155; border-radius: 6px; color: #94a3b8; font-size: 1rem; padding: 0.1rem 0.6rem; cursor: pointer; line-height: 1.5; transition: all 0.1s; }
+  .fp-pf-nav:hover { background: #1e3a5f; border-color: #3b82f6; color: #e2e8f0; }
+  .flatpickr-months .flatpickr-prev-month, .flatpickr-months .flatpickr-next-month { visibility: hidden !important; }
   /* Flatpickr — indicateurs jours */
   .flatpickr-day { position: relative !important; }
   .fp-day-dots { position: absolute; bottom: 3px; left: 0; right: 0; display: flex; justify-content: center; gap: 2px; pointer-events: none; line-height: 1; }
@@ -2214,12 +2217,6 @@
   }
 
   function buildCalendarPrefilters(calendarEl) {
-    const monthsEl = calendarEl.querySelector('.flatpickr-months');
-    // Remettre les flèches dans .flatpickr-months si elles avaient été déplacées
-    const prevBtn = calendarEl.querySelector('.flatpickr-prev-month');
-    const nextBtn = calendarEl.querySelector('.flatpickr-next-month');
-    if (prevBtn && monthsEl && !monthsEl.contains(prevBtn)) monthsEl.insertBefore(prevBtn, monthsEl.firstChild);
-    if (nextBtn && monthsEl && !monthsEl.contains(nextBtn)) monthsEl.appendChild(nextBtn);
     const old = calendarEl.querySelector('.fp-prefilter');
     if (old) old.remove();
     const allDays = new Set([..._calWptDays, ..._calGpsDays]);
@@ -2239,16 +2236,11 @@
           return `<button class="fp-pf-chip" onclick="applyDatePreset(${+y},${+m})">${mNames[+m-1]} ${y}</button>`;
         }).join('')}</div>`;
     }
-    // Déplacer les flèches de navigation en bas du panneau pré-filtres
-    const pb = monthsEl && monthsEl.querySelector('.flatpickr-prev-month');
-    const nb = monthsEl && monthsEl.querySelector('.flatpickr-next-month');
-    if (pb && nb) {
-      const navRow = document.createElement('div');
-      navRow.style.cssText = 'display:flex;justify-content:space-between;padding-top:0.3rem;margin-top:0.3rem;border-top:1px solid #1e2d40;';
-      navRow.appendChild(pb);
-      navRow.appendChild(nb);
-      div.appendChild(navRow);
-    }
+    // Boutons de navigation mois (remplacent les originaux cachés par CSS)
+    const navRow = document.createElement('div');
+    navRow.style.cssText = 'display:flex;justify-content:space-between;padding-top:0.3rem;margin-top:0.3rem;border-top:1px solid #1e2d40;';
+    navRow.innerHTML = `<button class="fp-pf-nav" onclick="dateRangePicker.changeMonth(-1)">‹</button><button class="fp-pf-nav" onclick="dateRangePicker.changeMonth(1)">›</button>`;
+    div.appendChild(navRow);
     calendarEl.insertBefore(div, calendarEl.firstChild);
   }
 
