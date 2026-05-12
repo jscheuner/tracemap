@@ -364,11 +364,13 @@
   <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:4;width:48px;height:48px;">
     <div id="dia-spinner" style="display:none;width:100%;height:100%;border:3px solid #334155;border-top-color:#3b82f6;border-radius:50%;animation:spin 0.7s linear infinite;"></div>
   </div>
-  <!-- Légende overlay bas -->
-  <div style="position:absolute;bottom:0;left:0;right:0;padding:1rem 5rem 1rem 1rem;background:linear-gradient(transparent,rgba(0,0,0,0.75));text-align:left;z-index:2;pointer-events:none;">
+  <!-- Légende overlay bas (nom + dossier) -->
+  <div style="position:absolute;bottom:0;left:0;right:0;padding:1rem 5rem 2.2rem 1rem;background:linear-gradient(transparent,rgba(0,0,0,0.75));text-align:left;z-index:2;pointer-events:none;">
     <div id="dia-name" style="font-size:1rem;color:#f1f5f9;font-weight:500;"></div>
     <div id="dia-meta" style="font-size:0.8rem;color:#94a3b8;margin-top:0.15rem;"></div>
   </div>
+  <!-- Date overlay bas gauche -->
+  <div id="dia-date" style="position:absolute;bottom:10px;left:16px;font-size:0.82rem;color:#cbd5e1;background:rgba(0,0,0,0.5);padding:0.2rem 0.55rem;border-radius:6px;z-index:3;pointer-events:none;"></div>
   <!-- Compteur overlay haut gauche -->
   <div id="dia-counter" style="position:absolute;top:16px;left:16px;font-size:0.85rem;color:#94a3b8;background:rgba(0,0,0,0.5);padding:0.2rem 0.5rem;border-radius:6px;z-index:3;"></div>
   <!-- Boutons navigation -->
@@ -661,6 +663,7 @@
         <label class="auto-label">
           <input type="checkbox" id="auto-refresh" checked onchange="toggleAutoRefresh()"/> Auto
         </label>
+        <button class="btn btn-ghost" onclick="openDiaporama()" title="Diaporama des photos visibles sur la carte">🎞️</button>
       </div>
       <div class="sep"></div>
       <!-- Zone 3 : outils (droite) -->
@@ -673,11 +676,6 @@
         <button class="btn btn-ghost" onclick="openPhoneQR()">QR</button>
         <button class="btn btn-ghost btn-icon" onclick="openSettingsModal()" title="Paramètres">⚙️</button>
       </div>
-    </div>
-
-    <!-- Barre diaporama -->
-    <div style="background:#131e2e;padding:0.2rem 1rem;border-bottom:1px solid #1e2d40;display:flex;align-items:center;gap:0.5rem;flex-shrink:0;">
-      <button class="btn btn-ghost" style="font-size:0.82rem;padding:0.2rem 0.65rem;" onclick="openDiaporama()" title="Diaporama des photos visibles sur la carte">🎞️ Diaporama</button>
     </div>
 
     <!-- Filter bar -->
@@ -1600,8 +1598,9 @@
       document.getElementById('dia-counter').textContent = `${diaIdx + 1} / ${diaPhotos.length}`;
       document.getElementById('dia-name').textContent = p.original_name || p.node_name || '—';
       const folder = p.node_id ? `📁 ${p.node_id}` : '';
-      const date = p.timestamp ? new Date(p.timestamp * 1000).toLocaleDateString('fr-CH', { day:'2-digit', month:'2-digit', year:'numeric' }) : '';
-      document.getElementById('dia-meta').textContent = [folder, date].filter(Boolean).join('  ·  ');
+      document.getElementById('dia-meta').textContent = folder;
+      const dateStr = p.timestamp ? new Date(p.timestamp * 1000).toLocaleString('fr-CH', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+      document.getElementById('dia-date').textContent = dateStr;
     };
 
     if (_isPreloaded(url)) {
