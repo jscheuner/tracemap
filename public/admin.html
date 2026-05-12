@@ -669,7 +669,6 @@
       <!-- Zone 3 : outils (droite) -->
       <div class="ctrl-group" id="ctrl-zone3" style="margin-left:auto;">
         <button class="btn btn-ghost" onclick="centerMap()">⊕ Centrer</button>
-        <button class="btn btn-ghost" id="trail-btn" onclick="toggleTrail()">Trajet</button>
         <button class="btn btn-ghost" onclick="openGPXModal()" title="Importer un GPX dans la base">↑ Import</button>
         <button class="btn btn-ghost" onclick="openGPXOverlayModal()" title="Afficher un GPX en superposition temporaire">Import temporaire</button>
         <button class="btn btn-ghost" onclick="openPhotoImportModal()" title="Importer une photo et la lier à un waypoint">📷 Photo</button>
@@ -2342,8 +2341,13 @@
     document.getElementById('bat-fill').style.background=p.battery>30?'#22c55e':'#ef4444';
   }
 
-  function centerMap() { if (!positions.length) return; const l=positions[positions.length-1]; map.setView([l.latitude,l.longitude],14); }
-  function toggleTrail() { showTrail=!showTrail; updateMap(); }
+  function centerMap() {
+    const pts = getFilteredPositions().filter(p => p.latitude && p.longitude);
+    if (!pts.length) return;
+    if (pts.length === 1) { map.setView([pts[0].latitude, pts[0].longitude], 15); return; }
+    const lats = pts.map(p => p.latitude), lons = pts.map(p => p.longitude);
+    map.fitBounds([[Math.min(...lats), Math.min(...lons)], [Math.max(...lats), Math.max(...lons)]], { padding: [40, 40] });
+  }
 
   function startAutoRefresh() {
     autoRefreshTimer = setInterval(() => { if (document.getElementById('auto-refresh').checked) { loadPositions(); loadTraces(); } }, 30000);
