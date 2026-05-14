@@ -1198,7 +1198,7 @@
   async function confirmDeleteWpt() {
     const password = document.getElementById('delete-wpt-password').value;
     if (!password) return;
-    const resp = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
+    const resp = await fetch('/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
     if (!resp.ok) {
       document.getElementById('delete-wpt-error').style.display = '';
       document.getElementById('delete-wpt-password').value = '';
