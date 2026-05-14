@@ -2610,14 +2610,9 @@
         </div>`,
         iconSize: [18, 18], iconAnchor: [9, 9]
       });
-      const marker = L.marker([p.latitude, p.longitude], { icon, draggable: isManual }).addTo(map)
+      const marker = L.marker([p.latitude, p.longitude], { icon }).addTo(map)
         .bindPopup(buildWaypointPopup(p, color, !!photoCount));
       if (isManual) {
-        marker.on('dragend', e => {
-          const { lat, lng } = e.target.getLatLng();
-          fetch(`/api/positions/${p.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'x-session-token': sessionToken }, body: JSON.stringify({ latitude: lat, longitude: lng }) })
-            .then(() => loadPositions());
-        });
         marker.on('contextmenu', e => {
           L.DomEvent.stopPropagation(e);
           _ctxMarkerId = p.id;
