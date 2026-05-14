@@ -1205,9 +1205,10 @@
       document.getElementById('delete-wpt-password').focus();
       return;
     }
+    const idToDelete = _deleteWptId;
     closeDeleteWptModal();
     closeWaypointEditModal();
-    await fetch(`/api/positions/${_deleteWptId}`, { method: 'DELETE', headers: { 'x-session-token': sessionToken } });
+    await fetch(`/api/positions/${idToDelete}`, { method: 'DELETE', headers: { 'x-session-token': sessionToken } });
     await loadPositions();
     renderWaypointsSidebar();
   }
