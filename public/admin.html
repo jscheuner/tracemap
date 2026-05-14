@@ -359,6 +359,7 @@
   <!-- Légende overlay bas -->
   <div style="position:absolute;bottom:0;left:0;right:0;padding:1rem 5rem 1rem 1rem;background:linear-gradient(transparent,rgba(0,0,0,0.75));z-index:2;pointer-events:none;">
     <div id="carousel-name" style="font-size:1rem;color:#f1f5f9;font-weight:500;"></div>
+    <div id="carousel-importer" style="font-size:0.75rem;color:#94a3b8;margin-top:0.2rem;"></div>
   </div>
   <!-- Compteur overlay haut gauche -->
   <div id="carousel-counter" style="position:absolute;top:16px;left:16px;font-size:0.85rem;color:#94a3b8;background:rgba(0,0,0,0.5);padding:0.2rem 0.5rem;border-radius:6px;z-index:3;"></div>
@@ -1245,11 +1246,14 @@
     const grid = document.getElementById('wpt-photos-grid');
     if (!grid) return;
     document.getElementById('wpt-delete-photos-btn').style.display = photos.length ? '' : 'none';
-    const thumbs = photos.map(p => `
-      <div class="photo-thumb" onclick="window.open('/photos/${p.filepath.replace(/\\/g,'/')}?token=${sessionToken}','_blank')">
+    const thumbs = photos.map(p => {
+      const tip = [p.original_name, p.importer_label ? `↑ ${p.importer_label}` : ''].filter(Boolean).join('\n');
+      return `
+      <div class="photo-thumb" title="${tip}" onclick="window.open('/photos/${p.filepath.replace(/\\/g,'/')}?token=${sessionToken}','_blank')">
         <img src="/photos/${p.filepath.replace(/\\/g,'/')}?token=${sessionToken}" alt="${p.original_name || ''}"/>
         <button class="photo-thumb-del" onclick="event.stopPropagation();deleteWaypointPhoto(${p.id},${positionId})" title="Supprimer">✕</button>
-      </div>`).join('');
+      </div>`;
+    }).join('');
     grid.innerHTML = thumbs + `<button class="photo-add-btn" onclick="triggerPhotoUpload()" title="Ajouter une photo">＋</button>`;
   }
 
@@ -1541,6 +1545,7 @@
       spinner.style.display = 'none';
       document.getElementById('carousel-counter').textContent = `${carouselIdx + 1} / ${carouselPhotos.length}`;
       document.getElementById('carousel-name').textContent = p.original_name || '';
+      document.getElementById('carousel-importer').textContent = p.importer_label ? `↑ ${p.importer_label}` : '';
     } else {
       // Pas encore chargée → spinner + attente
       spinner.style.display = 'block';
@@ -1553,6 +1558,7 @@
         spinner.style.display = 'none';
         document.getElementById('carousel-counter').textContent = `${carouselIdx + 1} / ${carouselPhotos.length}`;
         document.getElementById('carousel-name').textContent = p.original_name || '';
+        document.getElementById('carousel-importer').textContent = p.importer_label ? `↑ ${p.importer_label}` : '';
       };
       loader.onerror = () => { spinner.style.display = 'none'; imgEl.style.opacity = '1'; };
       loader.src = url;
@@ -1620,7 +1626,8 @@
       document.getElementById('dia-counter').textContent = `${diaIdx + 1} / ${diaPhotos.length}`;
       document.getElementById('dia-name').textContent = p.original_name || p.node_name || '—';
       const folder = p.node_id ? `📁 ${p.node_id}` : '';
-      document.getElementById('dia-meta').textContent = folder;
+      const importer = p.importer_label ? `↑ ${p.importer_label}` : '';
+      document.getElementById('dia-meta').textContent = [folder, importer].filter(Boolean).join('  ·  ');
       const dateStr = p.timestamp ? new Date(p.timestamp * 1000).toLocaleString('fr-CH', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
       document.getElementById('dia-date').textContent = dateStr;
     };

@@ -777,9 +777,11 @@ app.get(`/api/photos/for-positions`, (req, res) => {
   const rows = db.prepare(`
     SELECT ph.id, ph.filepath, ph.original_name, ph.created_at,
            pos.node_name, pos.node_id, pos.timestamp, pos.id AS position_id,
-           pos.latitude, pos.longitude
+           pos.latitude, pos.longitude,
+           tok.label AS importer_label
     FROM photos ph
     JOIN positions pos ON pos.id = ph.position_id
+    LEFT JOIN tokens tok ON tok.id = ph.imported_by
     WHERE ph.position_id IN (${placeholders})
     ORDER BY pos.timestamp ASC, ph.id ASC
   `).all(...ids);
@@ -790,11 +792,14 @@ app.get(`/api/photos`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const { position_id, trace_id } = req.query;
   if (trace_id) {
-    res.json(db.prepare(`SELECT ph.*, pos.node_name, pos.latitude, pos.longitude
+    res.json(db.prepare(`SELECT ph.*, pos.node_name, pos.latitude, pos.longitude, tok.label AS importer_label
       FROM photos ph JOIN positions pos ON pos.id = ph.position_id
+      LEFT JOIN tokens tok ON tok.id = ph.imported_by
       WHERE pos.trace_id = ? ORDER BY ph.created_at`).all(parseInt(trace_id)));
   } else if (position_id) {
-    res.json(db.prepare('SELECT * FROM photos WHERE position_id = ? ORDER BY created_at').all(parseInt(position_id)));
+    res.json(db.prepare(`SELECT ph.*, tok.label AS importer_label
+      FROM photos ph LEFT JOIN tokens tok ON tok.id = ph.imported_by
+      WHERE ph.position_id = ? ORDER BY ph.created_at`).all(parseInt(position_id)));
   } else {
     return res.status(400).json({ error: 'position_id ou trace_id requis' });
   }
