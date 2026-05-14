@@ -168,6 +168,13 @@ scheduleMidnightRollover();
 if (!getSetting('traccarToken')) {
   setSetting('traccarToken', crypto.randomBytes(16).toString('hex'));
 }
+// Génère le token de partage carte famille au premier démarrage
+if (!getSetting('mapShareToken')) {
+  setSetting('mapShareToken', crypto.randomBytes(24).toString('hex'));
+}
+if (!getSetting('mapPassword')) {
+  setSetting('mapPassword', 'famille');
+}
 
 // Si aucun token en DB → génère un token bootstrap affiché dans les logs
 if (!db.prepare('SELECT id FROM tokens LIMIT 1').get()) {
@@ -182,6 +189,12 @@ function isAuthenticated(req) {
   const token = req.headers['x-session-token'] || req.query.token;
   if (!token) return false;
   return !!db.prepare('SELECT id FROM tokens WHERE token = ?').get(token);
+}
+
+function isMapAuthenticated(req) {
+  const token = req.headers['x-map-token'] || req.query.map_token;
+  if (!token) return false;
+  return token === getSetting('mapShareToken');
 }
 
 function getTokenId(req) {
@@ -478,9 +491,16 @@ app.post(`/login`, (req, res) => {
   }
 });
 
+app.post('/map-login', (req, res) => {
+  const { password, shareToken } = req.body;
+  if (shareToken !== getSetting('mapShareToken')) return res.status(401).json({ error: 'Lien invalide' });
+  if (password !== getSetting('mapPassword')) return res.status(401).json({ error: 'Mot de passe incorrect' });
+  res.json({ ok: true, token: getSetting('mapShareToken') });
+});
+
 
 app.get(`/api/positions`, (req, res) => {
-  if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
+  if (!isAuthenticated(req) && !isMapAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const { hours, from, to, node_id, trace_id } = req.query;
   let query, params;
   if (trace_id) {
@@ -513,7 +533,7 @@ app.get(`/api/stats`, (req, res) => {
 });
 
 app.get(`/api/traces`, (req, res) => {
-  if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
+  if (!isAuthenticated(req) && !isMapAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   res.json(db.prepare(`
     SELECT t.*, COUNT(p.id) as point_count
     FROM traces t LEFT JOIN positions p ON p.trace_id = t.id
@@ -561,10 +581,11 @@ app.get(`/api/settings`, (req, res) => {
 
 app.put(`/api/settings`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
-  const { autoRollover, photoMatchRadius, wptCategories } = req.body;
+  const { autoRollover, photoMatchRadius, wptCategories, mapPassword } = req.body;
   if (autoRollover !== undefined) setSetting('autoRollover', autoRollover ? 'true' : 'false');
   if (photoMatchRadius !== undefined) setSetting('photoMatchRadius', String(parseInt(photoMatchRadius) || 50));
   if (wptCategories !== undefined) setSetting('wptCategories', JSON.stringify(Array.isArray(wptCategories) ? wptCategories : []));
+  if (mapPassword !== undefined && String(mapPassword).trim()) setSetting('mapPassword', String(mapPassword).trim());
   res.json({ success: true });
 });
 
@@ -697,7 +718,7 @@ app.all(`/api/traccar`, (req, res) => {
 // ── Photos ───────────────────────────────────────────────────
 
 app.get(`/photos/*`, (req, res) => {
-  if (!isAuthenticated(req)) return res.status(401).send('Non autorisé');
+  if (!isAuthenticated(req) && !isMapAuthenticated(req)) return res.status(401).send('Non autorisé');
   const safePath = path.normalize(req.params[0]).replace(/^(\.\.(\/|\\|$))+/, '');
   res.sendFile(safePath, { root: PHOTOS_DIR });
 });
@@ -775,13 +796,13 @@ app.post(`/api/photos/confirm`, (req, res) => {
 });
 
 app.get(`/api/photos/summary`, (req, res) => {
-  if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
+  if (!isAuthenticated(req) && !isMapAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const rows = db.prepare('SELECT position_id, COUNT(*) as count FROM photos GROUP BY position_id').all();
   res.json(rows.map(r => ({ id: r.position_id, count: r.count })));
 });
 
 app.get(`/api/calendar-summary`, (req, res) => {
-  if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
+  if (!isAuthenticated(req) && !isMapAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const fmt = "strftime('%Y-%m-%d', timestamp, 'unixepoch', 'localtime')";
   const wpt   = db.prepare(`SELECT DISTINCT ${fmt} as d FROM positions WHERE source = 'gpx_waypoint' AND timestamp > 0`).all().map(r => r.d);
   const gps   = db.prepare(`SELECT DISTINCT ${fmt} as d FROM positions WHERE source != 'gpx_waypoint' AND timestamp > 0`).all().map(r => r.d);
@@ -790,7 +811,7 @@ app.get(`/api/calendar-summary`, (req, res) => {
 });
 
 app.get(`/api/photos/for-positions`, (req, res) => {
-  if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
+  if (!isAuthenticated(req) && !isMapAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const ids = (req.query.ids || '').split(',').map(Number).filter(n => n > 0);
   if (!ids.length) return res.json([]);
   const placeholders = ids.map(() => '?').join(',');
@@ -809,7 +830,7 @@ app.get(`/api/photos/for-positions`, (req, res) => {
 });
 
 app.get(`/api/photos`, (req, res) => {
-  if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
+  if (!isAuthenticated(req) && !isMapAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
   const { position_id, trace_id } = req.query;
   if (trace_id) {
     res.json(db.prepare(`SELECT ph.*, pos.node_name, pos.latitude, pos.longitude, tok.label AS importer_label
@@ -1084,6 +1105,10 @@ app.get('/', (req, res) => {
 
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+app.get('/map', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'map.html'));
 });
 
 app.use((req, res) => res.status(404).send('Not found'));

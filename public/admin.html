@@ -673,6 +673,33 @@
         <button class="btn btn-primary" style="padding:0.4rem 0.75rem;" onclick="createToken()">+ Créer</button>
       </div>
     </div>
+    <div style="padding:0.75rem 0; border-top:1px solid #334155;">
+      <div style="font-size:0.9rem; color:#e2e8f0; margin-bottom:0.35rem;">Carte de partage famille</div>
+      <div style="font-size:0.78rem; color:#64748b; margin-bottom:0.6rem;">Partagez un lien sécurisé avec votre famille pour voir la carte en lecture seule.</div>
+      <div style="margin-bottom:0.6rem;">
+        <label style="font-size:0.8rem; color:#94a3b8; display:block; margin-bottom:0.25rem;">Mot de passe famille</label>
+        <div style="display:flex; gap:0.5rem; align-items:center;">
+          <input type="text" id="map-password-input" placeholder="famille"
+            style="flex:1; padding:0.45rem 0.65rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#e2e8f0; font-size:0.85rem; outline:none;"
+            onkeydown="if(event.key==='Enter')saveMapPassword()"/>
+          <button class="btn btn-ghost" style="padding:0.4rem 0.75rem; flex-shrink:0;" onclick="saveMapPassword()">Enregistrer</button>
+        </div>
+      </div>
+      <div style="margin-bottom:0.5rem;">
+        <label style="font-size:0.8rem; color:#94a3b8; display:block; margin-bottom:0.25rem;">Générer un lien par période (optionnel)</label>
+        <div style="display:flex; gap:0.4rem; margin-bottom:0.4rem; flex-wrap:wrap;">
+          <input type="text" id="map-link-label" placeholder="Ex: Noël 2025" style="flex:1; min-width:120px; padding:0.4rem 0.6rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#e2e8f0; font-size:0.82rem; outline:none;"/>
+          <input type="text" id="map-link-from" placeholder="Du JJ.MM.AAAA" style="flex:1; min-width:110px; padding:0.4rem 0.6rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#e2e8f0; font-size:0.82rem; outline:none;"/>
+          <input type="text" id="map-link-to" placeholder="Au JJ.MM.AAAA" style="flex:1; min-width:110px; padding:0.4rem 0.6rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#e2e8f0; font-size:0.82rem; outline:none;"/>
+        </div>
+        <button class="btn btn-ghost" onclick="generateMapLink()" style="padding:0.4rem 0.75rem;">Générer le lien</button>
+      </div>
+      <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.5rem;">
+        <input id="map-url-display" readonly placeholder="Le lien apparaîtra ici"
+          style="flex:1; padding:0.45rem 0.65rem; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#94a3b8; font-size:0.73rem; outline:none; font-family:monospace;"/>
+        <button class="btn btn-ghost" style="padding:0.4rem 0.75rem; flex-shrink:0;" onclick="copyMapUrl()">Copier</button>
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeSettingsModal()">Fermer</button>
     </div>
@@ -2863,6 +2890,8 @@
         renderSettingsCategoriesList();
         const traccarUrl = `${window.location.origin}/api/traccar?token=${s.traccarToken || ''}&id={deviceId}&lat={lat}&lon={lon}&timestamp={timestamp}&altitude={altitude}&speed={speed}&accuracy={accuracy}&batt={battery}`;
         document.getElementById('traccar-url-display').value = traccarUrl;
+        document.getElementById('map-url-display').dataset.token = s.mapShareToken || '';
+        document.getElementById('map-password-input').placeholder = s.mapPassword || 'famille';
       }
     } catch(e) {}
     loadTokens();
@@ -2881,6 +2910,51 @@
 
   function closeSettingsModal() {
     document.getElementById('settings-modal').classList.add('hidden');
+  }
+
+  async function saveMapPassword() {
+    const pw = document.getElementById('map-password-input').value.trim();
+    if (!pw) return;
+    await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-session-token': sessionToken },
+      body: JSON.stringify({ mapPassword: pw })
+    });
+    document.getElementById('map-password-input').placeholder = pw;
+    document.getElementById('map-password-input').value = '';
+  }
+
+  function generateMapLink() {
+    const shareToken = document.getElementById('map-url-display').dataset.token;
+    if (!shareToken) return;
+    const label = document.getElementById('map-link-label').value.trim();
+    const fromStr = document.getElementById('map-link-from').value.trim();
+    const toStr = document.getElementById('map-link-to').value.trim();
+    const parseDate = s => {
+      if (!s) return null;
+      const [d, m, y] = s.split('.');
+      if (!d || !m || !y) return null;
+      const dt = new Date(+y, +m - 1, +d);
+      return isNaN(dt) ? null : dt;
+    };
+    const from = parseDate(fromStr);
+    const to = parseDate(toStr);
+    let url = `${window.location.origin}/map?s=${shareToken}`;
+    if (from) url += `&from=${from.toISOString().split('T')[0]}`;
+    if (to) url += `&to=${to.toISOString().split('T')[0]}`;
+    if (label) url += `&label=${encodeURIComponent(label)}`;
+    document.getElementById('map-url-display').value = url;
+  }
+
+  function copyMapUrl() {
+    const input = document.getElementById('map-url-display');
+    if (!input.value) return;
+    navigator.clipboard.writeText(input.value).then(() => {
+      const btn = input.nextElementSibling;
+      const orig = btn.textContent;
+      btn.textContent = '✓ Copié';
+      setTimeout(() => btn.textContent = orig, 2000);
+    }).catch(() => { input.select(); document.execCommand('copy'); });
   }
 
   function updateToggleStyle(checked) {
