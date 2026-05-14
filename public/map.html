@@ -151,6 +151,18 @@
 </head>
 <body>
 
+<!-- Tutorial modal -->
+<div id="tutorial-modal" class="modal-overlay hidden" style="z-index:9500;">
+  <div style="background:#1e293b; border:1px solid #334155; border-radius:20px; padding:2.5rem 2rem; width:360px; max-width:92vw; text-align:center;">
+    <div id="tut-icon" style="font-size:3.5rem; margin-bottom:0.75rem; line-height:1;"></div>
+    <h2 id="tut-title" style="font-size:1.15rem; font-weight:700; margin-bottom:0.75rem; color:#f1f5f9;"></h2>
+    <p id="tut-text" style="color:#94a3b8; font-size:0.9rem; line-height:1.6; margin-bottom:1.75rem;"></p>
+    <div id="tut-dots" style="display:flex; justify-content:center; gap:0.5rem; margin-bottom:1.25rem;"></div>
+    <button id="tut-next-btn" onclick="nextTutorialStep()" style="width:100%; padding:0.8rem; background:#3b82f6; border:none; border-radius:10px; color:white; font-size:1rem; font-weight:600; cursor:pointer; transition:background 0.15s;">Suivant →</button>
+    <button onclick="closeTutorial()" style="margin-top:0.65rem; background:none; border:none; color:#475569; font-size:0.82rem; cursor:pointer; width:100%; padding:0.3rem;">Passer</button>
+  </div>
+</div>
+
 <!-- Login -->
 <div id="login-screen">
   <div class="login-card">
@@ -345,6 +357,7 @@
     loadPhotoSummary();
     loadCalendarSummary();
     startAutoRefresh();
+    if (!localStorage.getItem(TUTORIAL_KEY)) setTimeout(showTutorial, 900);
   }
 
   // ── State ────────────────────────────────────────────────────
@@ -1074,6 +1087,56 @@
     if (carBtn) carBtn.textContent = isFs ? '✕⛶' : '⛶';
     if (diaBtn) diaBtn.textContent = isFs ? '✕⛶' : '⛶';
   });
+
+  // ── Tutoriel ─────────────────────────────────────────────────
+  const TUTORIAL_KEY = 'map_tutorial_v1';
+  let _tutStep = 0;
+
+  const _tutSteps = [
+    {
+      icon: '📅',
+      title: 'Filtrer par période',
+      text: 'Cliquez sur le <strong style="color:#e2e8f0">sélecteur de date</strong> pour choisir une période. Utilisez les raccourcis <strong style="color:#e2e8f0">Année</strong> et <strong style="color:#e2e8f0">Mois</strong> pour naviguer rapidement, ou cliquez directement sur deux dates.'
+    },
+    {
+      icon: '☰',
+      title: 'Tracés et points GPS',
+      text: 'Le bouton <strong style="color:#e2e8f0">☰</strong> en haut à gauche ouvre le volet latéral. Retrouvez la liste des <strong style="color:#e2e8f0">tracés</strong> et des <strong style="color:#e2e8f0">points GPS</strong> classés par date, et cliquez pour les afficher sur la carte.'
+    },
+    {
+      icon: '🎞️',
+      title: 'Diaporama photos',
+      text: 'Le bouton <strong style="color:#e2e8f0">🎞️</strong> dans la barre d\'outils lance un diaporama de toutes les photos visibles. Naviguez avec les <strong style="color:#e2e8f0">flèches</strong>, la <strong style="color:#e2e8f0">molette</strong> ou le <strong style="color:#e2e8f0">clavier</strong>. Cliquez sur 📍 pour voir le point sur la carte.'
+    }
+  ];
+
+  function showTutorial() {
+    _tutStep = 0;
+    _renderTutStep();
+    document.getElementById('tutorial-modal').classList.remove('hidden');
+  }
+
+  function _renderTutStep() {
+    const s = _tutSteps[_tutStep];
+    document.getElementById('tut-icon').textContent = s.icon;
+    document.getElementById('tut-title').textContent = s.title;
+    document.getElementById('tut-text').innerHTML = s.text;
+    document.getElementById('tut-dots').innerHTML = _tutSteps.map((_, i) =>
+      `<span style="width:9px;height:9px;border-radius:50%;background:${i===_tutStep?'#3b82f6':'#334155'};display:inline-block;transition:background 0.2s;"></span>`
+    ).join('');
+    const btn = document.getElementById('tut-next-btn');
+    btn.textContent = _tutStep === _tutSteps.length - 1 ? "C'est parti ! 🚀" : 'Suivant →';
+  }
+
+  function nextTutorialStep() {
+    if (_tutStep < _tutSteps.length - 1) { _tutStep++; _renderTutStep(); }
+    else closeTutorial();
+  }
+
+  function closeTutorial() {
+    localStorage.setItem(TUTORIAL_KEY, '1');
+    document.getElementById('tutorial-modal').classList.add('hidden');
+  }
 
   // ── Init ─────────────────────────────────────────────────────
   if (mapToken && _shareToken) {
