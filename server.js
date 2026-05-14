@@ -32,7 +32,7 @@ fs.mkdirSync(PHOTOS_TMP, { recursive: true });
 
 const uploadTmp = multer({
   dest: PHOTOS_TMP,
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) cb(null, true);
     else cb(new Error('Fichier non image'));
@@ -93,8 +93,13 @@ db.exec(`CREATE TABLE IF NOT EXISTS photos (
   position_id INTEGER NOT NULL,
   filepath TEXT NOT NULL,
   original_name TEXT,
-  created_at INTEGER DEFAULT (strftime('%s','now'))
+  created_at INTEGER DEFAULT (strftime('%s','now')),
+  imported_by INTEGER REFERENCES tokens(id)
 );`);
+// Migration : ajouter imported_by si absent
+try { db.exec(`ALTER TABLE photos ADD COLUMN imported_by INTEGER REFERENCES tokens(id)`); } catch {}
+// Photos existantes sans importateur → token id 2 (Natel Joel)
+db.exec(`UPDATE photos SET imported_by = 2 WHERE imported_by IS NULL`);
 
 db.exec(`CREATE TABLE IF NOT EXISTS tokens (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -177,6 +182,13 @@ function isAuthenticated(req) {
   const token = req.headers['x-session-token'] || req.query.token;
   if (!token) return false;
   return !!db.prepare('SELECT id FROM tokens WHERE token = ?').get(token);
+}
+
+function getTokenId(req) {
+  const token = req.headers['x-session-token'] || req.query.token;
+  if (!token) return null;
+  const row = db.prepare('SELECT id FROM tokens WHERE token = ?').get(token);
+  return row ? row.id : null;
 }
 
 function buildNonce(packetId, fromNode) {
@@ -694,6 +706,7 @@ app.post(`/api/photos/upload`, uploadTmp.single('photo'), async (req, res) => {
 
   const ext = path.extname(file.originalname || '').toLowerCase() || '.jpg';
 
+  const importerId = getTokenId(req);
   const savePhoto = (wpt) => {
     const folder = wpt.node_id.replace(/[^a-zA-Z0-9_\-]/g, '_');
     const dir = path.join(PHOTOS_DIR, folder);
@@ -701,7 +714,7 @@ app.post(`/api/photos/upload`, uploadTmp.single('photo'), async (req, res) => {
     const filename = `${wpt.id}_${Date.now()}${ext}`;
     const filepath = path.join(folder, filename);
     fs.renameSync(file.path, path.join(PHOTOS_DIR, filepath));
-    return db.prepare('INSERT INTO photos (position_id, filepath, original_name) VALUES (?, ?, ?)').run(wpt.id, filepath, file.originalname || filename);
+    return db.prepare('INSERT INTO photos (position_id, filepath, original_name, imported_by) VALUES (?, ?, ?, ?)').run(wpt.id, filepath, file.originalname || filename, importerId);
   };
 
   if (position_id) {
@@ -737,7 +750,7 @@ app.post(`/api/photos/confirm`, (req, res) => {
   const filename = `${wpt.id}_${Date.now()}${ext}`;
   const filepath = path.join(folder, filename);
   fs.renameSync(tmpPath, path.join(PHOTOS_DIR, filepath));
-  const result = db.prepare('INSERT INTO photos (position_id, filepath, original_name) VALUES (?, ?, ?)').run(parseInt(position_id), filepath, original_name || filename);
+  const result = db.prepare('INSERT INTO photos (position_id, filepath, original_name, imported_by) VALUES (?, ?, ?, ?)').run(parseInt(position_id), filepath, original_name || filename, getTokenId(req));
   res.json({ id: result.lastInsertRowid, filepath });
 });
 
@@ -790,6 +803,7 @@ app.get(`/api/photos`, (req, res) => {
 // Import en masse : position_id (wpt) ou trace_id (trace avec matching GPS)
 app.post(`/api/photos/bulk`, uploadTmp.array('photos', 100), async (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
+  const importerId = getTokenId(req);
   const files = req.files || [];
   const { position_id, trace_id } = req.body;
   const results = { linked: [], no_gps: [], errors: [] };
@@ -807,8 +821,8 @@ app.post(`/api/photos/bulk`, uploadTmp.array('photos', 100), async (req, res) =>
         fs.mkdirSync(path.dirname(dest), { recursive: true });
         fs.renameSync(file.path, dest);
         const filepath = `${folder}/${file.filename}`;
-        db.prepare('INSERT INTO photos (position_id, filepath, original_name, created_at) VALUES (?, ?, ?, ?)')
-          .run(pid, filepath, file.originalname, Math.floor(Date.now() / 1000));
+        db.prepare('INSERT INTO photos (position_id, filepath, original_name, created_at, imported_by) VALUES (?, ?, ?, ?, ?)')
+          .run(pid, filepath, file.originalname, Math.floor(Date.now() / 1000), importerId);
         results.linked.push({ file: file.originalname, position_id: pid });
       } catch(e) {
         try { fs.unlinkSync(file.path); } catch {}
@@ -842,8 +856,8 @@ app.post(`/api/photos/bulk`, uploadTmp.array('photos', 100), async (req, res) =>
         fs.renameSync(file.path, dest);
         const filepath = `${folder}/${file.filename}`;
         const pid = targetPos ? targetPos.id : firstPos.id;
-        db.prepare('INSERT INTO photos (position_id, filepath, original_name, created_at) VALUES (?, ?, ?, ?)')
-          .run(pid, filepath, file.originalname, Math.floor(Date.now() / 1000));
+        db.prepare('INSERT INTO photos (position_id, filepath, original_name, created_at, imported_by) VALUES (?, ?, ?, ?, ?)')
+          .run(pid, filepath, file.originalname, Math.floor(Date.now() / 1000), importerId);
         if (targetPos) results.linked.push({ file: file.originalname, position_id: pid, dist });
         else results.no_gps.push({ file: file.originalname, position_id: firstPos.id });
       } catch(e) {
@@ -886,8 +900,8 @@ app.post(`/api/photos/bulk`, uploadTmp.array('photos', 100), async (req, res) =>
             const dest = path.join(PHOTOS_DIR, folder, file.filename);
             fs.renameSync(file.path, dest);
             const filepath = `${folder}/${file.filename}`;
-            db.prepare('INSERT INTO photos (position_id, filepath, original_name, created_at) VALUES (?, ?, ?, ?)')
-              .run(best.id, filepath, file.originalname, Math.floor(Date.now() / 1000));
+            db.prepare('INSERT INTO photos (position_id, filepath, original_name, created_at, imported_by) VALUES (?, ?, ?, ?, ?)')
+              .run(best.id, filepath, file.originalname, Math.floor(Date.now() / 1000), importerId);
             results.linked.push({ file: file.originalname, waypoint_name: best.node_name || best.node_id, dist: Math.round(bestDist) });
           } else {
             const pendingPath = path.join(pendingFolder, file.filename);
@@ -942,6 +956,7 @@ app.post(`/api/photos/bulk`, uploadTmp.array('photos', 100), async (req, res) =>
 
 app.post(`/api/photos/create-waypoint`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
+  const importerId = getTokenId(req);
   const { tempFilename, lat, lon, exif_date, name, folder, original_name, position_id } = req.body;
   if (!tempFilename) return res.status(400).json({ error: 'tempFilename manquant' });
 
@@ -956,8 +971,8 @@ app.post(`/api/photos/create-waypoint`, (req, res) => {
     const destPath = path.join(destFolder, tempFilename);
     try { fs.renameSync(srcPath, destPath); } catch {}
     const filepath = `${wpt.node_id || 'imports'}/${tempFilename}`;
-    db.prepare('INSERT INTO photos (position_id, filepath, original_name, created_at) VALUES (?, ?, ?, ?)')
-      .run(wpt.id, filepath, original_name || tempFilename, Math.floor(Date.now() / 1000));
+    db.prepare('INSERT INTO photos (position_id, filepath, original_name, created_at, imported_by) VALUES (?, ?, ?, ?, ?)')
+      .run(wpt.id, filepath, original_name || tempFilename, Math.floor(Date.now() / 1000), importerId);
     return res.json({ id: wpt.id, node_name: wpt.node_name, node_id: wpt.node_id });
   }
 
@@ -977,8 +992,8 @@ app.post(`/api/photos/create-waypoint`, (req, res) => {
   try { fs.renameSync(srcPath, destPath); } catch {}
 
   const filepath = `${nodeId}/${tempFilename}`;
-  db.prepare('INSERT INTO photos (position_id, filepath, original_name, created_at) VALUES (?, ?, ?, ?)')
-    .run(pos.lastInsertRowid, filepath, original_name || nodeName, Math.floor(Date.now() / 1000));
+  db.prepare('INSERT INTO photos (position_id, filepath, original_name, created_at, imported_by) VALUES (?, ?, ?, ?, ?)')
+    .run(pos.lastInsertRowid, filepath, original_name || nodeName, Math.floor(Date.now() / 1000), importerId);
 
   res.json({ id: pos.lastInsertRowid, node_name: nodeName, node_id: nodeId });
 });
