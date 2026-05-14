@@ -257,6 +257,13 @@
   /* Flatpickr — indicateurs jours */
   .flatpickr-day { position: relative !important; }
   .fp-day-dots { position: absolute; bottom: 3px; left: 0; right: 0; display: flex; justify-content: center; gap: 2px; pointer-events: none; line-height: 1; }
+  /* Menu contextuel carte */
+  .ctx-menu { position:fixed; background:#1e293b; border:1px solid #334155; border-radius:8px; padding:0.3rem 0; z-index:9500; min-width:190px; box-shadow:0 4px 20px rgba(0,0,0,0.6); }
+  .ctx-item { display:block; width:100%; background:none; border:none; color:#e2e8f0; font-size:0.82rem; padding:0.45rem 1rem; text-align:left; cursor:pointer; white-space:nowrap; }
+  .ctx-item:hover { background:#1e3a5f; }
+  .ctx-sep { height:1px; background:#334155; margin:0.2rem 0; }
+  .ctx-item.danger { color:#f87171; }
+  .ctx-item.danger:hover { background:#450a0a; }
   @keyframes spin { to { transform: rotate(360deg); } }
   @keyframes dia-pulse { 0%{transform:translate(-50%,-50%) scale(1);opacity:1} 100%{transform:translate(-50%,-50%) scale(2.5);opacity:0} }
   </style>
@@ -369,6 +376,38 @@
   <!-- Boutons haut droite -->
   <button id="carousel-fs-btn" onclick="toggleCarouselFullscreen()" title="Plein écran (F11)" style="position:absolute;top:12px;right:52px;background:rgba(0,0,0,0.5);border:none;color:#94a3b8;font-size:1.1rem;cursor:pointer;padding:0.3rem 0.5rem;border-radius:6px;z-index:3;">⛶</button>
   <button onclick="closeCarousel()" style="position:absolute;top:12px;right:12px;background:rgba(0,0,0,0.5);border:none;color:#e2e8f0;font-size:1.4rem;cursor:pointer;padding:0.3rem 0.5rem;border-radius:6px;z-index:3;">✕</button>
+</div>
+
+<!-- Menus contextuels carte -->
+<div id="map-ctx-menu" class="ctx-menu" style="display:none;">
+  <button class="ctx-item" onclick="_ctxCreatePoint()">📍 Créer un point ici</button>
+</div>
+<div id="marker-ctx-menu" class="ctx-menu" style="display:none;">
+  <button class="ctx-item" onclick="_ctxMovePoint()">↕ Déplacer le point</button>
+</div>
+
+<!-- Toast mode déplacement -->
+<div id="move-mode-toast" class="hidden" style="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1e3a5f;border:1px solid #3b82f6;color:#93c5fd;border-radius:24px;padding:0.55rem 1.4rem;font-size:0.85rem;font-weight:600;z-index:9400;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,0.5);white-space:nowrap;">
+  🎯 Cliquez sur la carte pour poser le point — Échap pour annuler
+</div>
+
+<!-- Modal création point manuel -->
+<div id="manual-point-modal" class="modal-overlay hidden" onclick="if(event.target===this)closeManualPointModal()">
+  <div class="modal-box" style="max-width:360px;">
+    <h3>Nouveau point manuel</h3>
+    <label class="form-label">Nom</label>
+    <input id="mp-name" class="form-input" placeholder="Nom du point" style="margin-bottom:0.75rem;" onkeydown="if(event.key==='Enter')confirmCreateManualPoint()"/>
+    <label class="form-label">Dossier / Catégorie</label>
+    <select id="mp-folder" class="form-input" style="margin-bottom:0.5rem;" onchange="document.getElementById('mp-new-folder-row').style.display=this.value==='__new__'?'':'none'"></select>
+    <input id="mp-new-folder-input" class="form-input" placeholder="Nouveau dossier…" style="display:none;margin-bottom:0.75rem;"/>
+    <div id="mp-new-folder-row" style="display:none;margin-bottom:0.75rem;">
+      <input id="mp-new-folder-input2" class="form-input" placeholder="Nom du nouveau dossier…"/>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeManualPointModal()">Annuler</button>
+      <button class="btn btn-primary" onclick="confirmCreateManualPoint()">Créer</button>
+    </div>
+  </div>
 </div>
 
 <!-- Modal Diaporama -->
@@ -711,6 +750,9 @@
       <button class="filter-chip active" id="chip-src-gpx_waypoint" onclick="toggleSourceFilter('gpx_waypoint')">
         <span class="chip-dot" style="background:#a855f7;border-radius:2px;transform:rotate(45deg)"></span>POI / Waypoints
       </button>
+      <button class="filter-chip active" id="chip-src-manual" onclick="toggleSourceFilter('manual')">
+        <span class="chip-dot" style="background:#f59e0b;border-radius:2px;transform:rotate(45deg);border:1px dashed rgba(255,255,255,0.6);"></span>Points manuels
+      </button>
       <div id="node-filter-group" class="hidden">
         <div class="filter-sep"></div>
         <span class="filter-label">Appareils :</span>
@@ -762,12 +804,12 @@
   let showTrail = true, autoRefreshTimer = null;
   let gpxOverlayData = null, gpxOverlayLayerGroup = null;
   let sidebarTab = 'traces';
-  let activeSourceFilters = new Set(['meshtastic_mqtt', 'phone_gps', 'gpx_import', 'gpx_waypoint']);
+  let activeSourceFilters = new Set(['meshtastic_mqtt', 'phone_gps', 'gpx_import', 'gpx_waypoint', 'manual']);
   let activeNodeFilters = new Set();
   let activeCategoryFilters = new Set();
 
-  const SOURCE_COLORS = { meshtastic_mqtt: '#3b82f6', phone_gps: '#22c55e', gpx_import: '#f97316', gpx_waypoint: '#a855f7' };
-  const SOURCE_LABELS = { meshtastic_mqtt: 'LilyGo (LoRa)', phone_gps: 'Téléphone', gpx_import: 'GPX tracé', gpx_waypoint: 'POI / Waypoints' };
+  const SOURCE_COLORS = { meshtastic_mqtt: '#3b82f6', phone_gps: '#22c55e', gpx_import: '#f97316', gpx_waypoint: '#a855f7', manual: '#f59e0b' };
+  const SOURCE_LABELS = { meshtastic_mqtt: 'LilyGo (LoRa)', phone_gps: 'Téléphone', gpx_import: 'GPX tracé', gpx_waypoint: 'POI / Waypoints', manual: 'Point manuel' };
   const CATEGORY_COLORS = ['#a855f7', '#ec4899', '#06b6d4', '#84cc16', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6'];
 
   // ── Auth ────────────────────────────────────────────────────
@@ -906,7 +948,7 @@
 
   function renderWaypointsSidebar() {
     const list = document.getElementById('waypoints-list');
-    let wpts = positions.filter(p => p.source === 'gpx_waypoint');
+    let wpts = positions.filter(p => p.source === 'gpx_waypoint' || p.source === 'manual');
     if (!document.getElementById('trace-select').value && dateRangeFrom && dateRangeTo) {
       const fromTs = Math.floor(dateRangeFrom.getTime() / 1000);
       const toTs = Math.floor(new Date(dateRangeTo).setHours(23, 59, 59, 999) / 1000);
@@ -1704,6 +1746,57 @@
     }
   }
 
+  // ── Points manuels ────────────────────────────────────────────
+  let _ctxLatLng = null, _ctxMarkerId = null;
+  let _moveMode = { active: false, positionId: null };
+
+  function _ctxCreatePoint() {
+    document.getElementById('map-ctx-menu').style.display = 'none';
+    if (!_ctxLatLng) return;
+    const folderSel = document.getElementById('mp-folder');
+    const cats = [...new Set(positions.filter(p => p.source === 'gpx_waypoint' || p.source === 'manual').map(p => p.node_id).filter(Boolean))].sort();
+    folderSel.innerHTML = cats.map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('') +
+      `<option value="__new__">✏️ Nouveau dossier…</option>`;
+    document.getElementById('mp-name').value = '';
+    document.getElementById('mp-new-folder-row').style.display = 'none';
+    document.getElementById('manual-point-modal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('mp-name').focus(), 50);
+  }
+
+  function closeManualPointModal() {
+    document.getElementById('manual-point-modal').classList.add('hidden');
+  }
+
+  async function confirmCreateManualPoint() {
+    const name = document.getElementById('mp-name').value.trim() || 'Point manuel';
+    const sel = document.getElementById('mp-folder');
+    const folder = sel.value === '__new__'
+      ? (document.getElementById('mp-new-folder-input2').value.trim() || 'Manuel')
+      : sel.value || 'Manuel';
+    const res = await fetch('/api/positions/manual', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-session-token': sessionToken },
+      body: JSON.stringify({ lat: _ctxLatLng.lat, lon: _ctxLatLng.lng, name, folder })
+    });
+    if (!res.ok) return;
+    closeManualPointModal();
+    loadPositions();
+    loadCalendarSummary();
+  }
+
+  function _ctxMovePoint() {
+    document.getElementById('marker-ctx-menu').style.display = 'none';
+    _moveMode = { active: true, positionId: _ctxMarkerId };
+    map.getContainer().style.cursor = 'crosshair';
+    document.getElementById('move-mode-toast').classList.remove('hidden');
+  }
+
+  function _cancelMoveMode() {
+    _moveMode = { active: false, positionId: null };
+    map.getContainer().style.cursor = '';
+    document.getElementById('move-mode-toast').classList.add('hidden');
+  }
+
   // ── Quill rich text editor (waypoint description) ─────────────
   let wptDescEditor = null;
   function initWptDescEditor() {
@@ -1915,6 +2008,31 @@
   function initMap() {
     map = L.map('map').setView([46.73, 6.52], 10);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors', maxZoom: 19 }).addTo(map);
+
+    // Clic droit sur la carte → menu création point
+    map.on('contextmenu', e => {
+      _ctxLatLng = e.latlng;
+      const m = document.getElementById('map-ctx-menu');
+      m.style.display = 'block';
+      m.style.left = e.originalEvent.clientX + 'px';
+      m.style.top  = e.originalEvent.clientY + 'px';
+      document.getElementById('marker-ctx-menu').style.display = 'none';
+    });
+
+    // Clic gauche sur la carte → mode déplacement ou fermer les menus
+    map.on('click', e => {
+      document.getElementById('map-ctx-menu').style.display = 'none';
+      document.getElementById('marker-ctx-menu').style.display = 'none';
+      if (_moveMode.active) {
+        const pid = _moveMode.positionId;
+        _cancelMoveMode();
+        fetch(`/api/positions/${pid}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'x-session-token': sessionToken },
+          body: JSON.stringify({ latitude: e.latlng.lat, longitude: e.latlng.lng })
+        }).then(() => loadPositions());
+      }
+    });
   }
 
   function getTinyMarkerIcon(color) {
@@ -2354,7 +2472,7 @@
     return positions.filter(p => {
       const src = p.source || 'meshtastic_mqtt';
       if (!activeSourceFilters.has(src)) return false;
-      if (src === 'gpx_waypoint') {
+      if (src === 'gpx_waypoint' || src === 'manual') {
         if (applyDateToWpts && (p.timestamp < fromTs || p.timestamp > toTs)) return false;
         return activeCategoryFilters.size === 0 || activeCategoryFilters.has(p.node_id);
       }
@@ -2363,7 +2481,7 @@
   }
 
   function buildCategoryColorMap() {
-    const cats = [...new Set(positions.filter(p => p.source === 'gpx_waypoint').map(p => p.node_id))];
+    const cats = [...new Set(positions.filter(p => p.source === 'gpx_waypoint' || p.source === 'manual').map(p => p.node_id))];
     const m = new Map();
     cats.forEach((cat, i) => m.set(cat, CATEGORY_COLORS[i % CATEGORY_COLORS.length]));
     return m;
@@ -2410,8 +2528,8 @@
       return;
     }
     const catColorMap = buildCategoryColorMap();
-    const trackPts = filtered.filter(p => p.source !== 'gpx_waypoint');
-    const wayptPts = filtered.filter(p => p.source === 'gpx_waypoint');
+    const trackPts = filtered.filter(p => p.source !== 'gpx_waypoint' && p.source !== 'manual');
+    const wayptPts = filtered.filter(p => p.source === 'gpx_waypoint' || p.source === 'manual');
     const overallLastId = trackPts.length ? trackPts[trackPts.length - 1].id : null;
 
     if (trackPts.length) {
@@ -2434,16 +2552,37 @@
     }
 
     wayptPts.forEach(p => {
-      const color = catColorMap.get(p.node_id) || '#a855f7';
+      const isManual = p.source === 'manual';
+      const color = isManual ? '#f59e0b' : (catColorMap.get(p.node_id) || '#a855f7');
       const photoCount = wptPhotoIds.get(p.id) || 0;
+      const border = isManual ? 'border:2px dashed rgba(255,255,255,0.9)' : 'border:2px solid white';
       const icon = L.divIcon({
         html: `<div style="position:relative;width:18px;height:18px;">
-          <div style="background:${color};width:11px;height:11px;border-radius:2px;border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.5);transform:rotate(45deg);position:absolute;top:3px;left:3px;"></div>
+          <div style="background:${color};width:11px;height:11px;border-radius:2px;${border};box-shadow:0 2px 6px rgba(0,0,0,0.5);transform:rotate(45deg);position:absolute;top:3px;left:3px;"></div>
+          ${isManual ? '<div style="position:absolute;top:-9px;left:-9px;font-size:9px;line-height:1;background:rgba(0,0,0,0.55);border-radius:3px;padding:0 2px;">✏️</div>' : ''}
           ${photoCount ? `<div style="position:absolute;top:-14px;right:-14px;background:#78350f;color:#fbbf24;font-size:9px;font-weight:700;line-height:1;padding:1px 3px;border-radius:4px;white-space:nowrap;">📷${photoCount}</div>` : ''}
         </div>`,
         iconSize: [18, 18], iconAnchor: [9, 9]
       });
-      markers.push(L.marker([p.latitude,p.longitude],{icon}).addTo(map).bindPopup(buildWaypointPopup(p, color, !!photoCount)));
+      const marker = L.marker([p.latitude, p.longitude], { icon, draggable: isManual }).addTo(map)
+        .bindPopup(buildWaypointPopup(p, color, !!photoCount));
+      if (isManual) {
+        marker.on('dragend', e => {
+          const { lat, lng } = e.target.getLatLng();
+          fetch(`/api/positions/${p.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'x-session-token': sessionToken }, body: JSON.stringify({ latitude: lat, longitude: lng }) })
+            .then(() => loadPositions());
+        });
+        marker.on('contextmenu', e => {
+          L.DomEvent.stopPropagation(e);
+          _ctxMarkerId = p.id;
+          const m = document.getElementById('marker-ctx-menu');
+          m.style.display = 'block';
+          m.style.left = e.originalEvent.clientX + 'px';
+          m.style.top  = e.originalEvent.clientY + 'px';
+          document.getElementById('map-ctx-menu').style.display = 'none';
+        });
+      }
+      markers.push(marker);
     });
 
     document.getElementById('status-text').textContent = 'En ligne';
@@ -2896,8 +3035,19 @@
   }
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeTraceModal(); closeGPXModal(); closeGPXOverlayModal(); closeDeleteModal(); closeDetailsModal(); closeSettingsModal(); closeWaypointEditModal(); closeDiaporama(); document.getElementById('qr-modal').classList.add('hidden'); }
+    if (e.key === 'Escape') { closeTraceModal(); closeGPXModal(); closeGPXOverlayModal(); closeDeleteModal(); closeDetailsModal(); closeSettingsModal(); closeWaypointEditModal(); closeDiaporama(); closeManualPointModal(); _cancelMoveMode(); document.getElementById('qr-modal').classList.add('hidden'); document.getElementById('map-ctx-menu').style.display='none'; document.getElementById('marker-ctx-menu').style.display='none'; }
     if (e.key === 'Enter' && !document.getElementById('trace-modal').classList.contains('hidden')) confirmNewTrace();
+  });
+
+  // Fermer les menus contextuels sur clic ailleurs
+  document.addEventListener('click', () => {
+    document.getElementById('map-ctx-menu').style.display = 'none';
+    document.getElementById('marker-ctx-menu').style.display = 'none';
+  });
+
+  // Gestion du select "Nouveau dossier" dans le modal point manuel
+  document.getElementById('mp-folder').addEventListener('change', function() {
+    document.getElementById('mp-new-folder-row').style.display = this.value === '__new__' ? '' : 'none';
   });
 
   checkSession();

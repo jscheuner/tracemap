@@ -488,12 +488,12 @@ app.get(`/api/positions`, (req, res) => {
     params = [parseInt(trace_id)];
     if (node_id) { query += ' AND node_id = ?'; params.push(node_id); }
   } else if (from && to) {
-    query = "SELECT * FROM positions WHERE (timestamp BETWEEN ? AND ? OR source = 'gpx_waypoint')";
+    query = "SELECT * FROM positions WHERE (timestamp BETWEEN ? AND ? OR source IN ('gpx_waypoint','manual'))";
     params = [parseInt(from), parseInt(to)];
     if (node_id) { query += ' AND node_id = ?'; params.push(node_id); }
   } else {
     const since = Math.floor(Date.now() / 1000) - parseInt(hours || 168) * 3600;
-    query = "SELECT * FROM positions WHERE (timestamp > ? OR source = 'gpx_waypoint')";
+    query = "SELECT * FROM positions WHERE (timestamp > ? OR source IN ('gpx_waypoint','manual'))";
     params = [since];
     if (node_id) { query += ' AND node_id = ?'; params.push(node_id); }
   }
@@ -576,13 +576,33 @@ app.put(`/api/traces/:id/end`, (req, res) => {
 
 app.put(`/api/positions/:id`, (req, res) => {
   if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
-  const { node_name, node_id, altitude, timestamp, description } = req.body;
+  const { node_name, node_id, altitude, timestamp, description, latitude, longitude } = req.body;
   if (node_name !== undefined) db.prepare('UPDATE positions SET node_name = ? WHERE id = ?').run(node_name, req.params.id);
   if (node_id !== undefined) db.prepare('UPDATE positions SET node_id = ? WHERE id = ?').run(node_id, req.params.id);
   if (altitude !== undefined) db.prepare('UPDATE positions SET altitude = ? WHERE id = ?').run(altitude, req.params.id);
   if (timestamp !== undefined) db.prepare('UPDATE positions SET timestamp = ? WHERE id = ?').run(timestamp, req.params.id);
   if (description !== undefined) db.prepare('UPDATE positions SET description = ? WHERE id = ?').run(description || null, req.params.id);
+  if (latitude !== undefined || longitude !== undefined) {
+    const pos = db.prepare('SELECT source FROM positions WHERE id = ?').get(req.params.id);
+    if (pos?.source === 'manual') {
+      if (latitude  !== undefined) db.prepare('UPDATE positions SET latitude  = ? WHERE id = ?').run(parseFloat(latitude),  req.params.id);
+      if (longitude !== undefined) db.prepare('UPDATE positions SET longitude = ? WHERE id = ?').run(parseFloat(longitude), req.params.id);
+    }
+  }
   res.json(db.prepare('SELECT * FROM positions WHERE id = ?').get(req.params.id));
+});
+
+app.post(`/api/positions/manual`, (req, res) => {
+  if (!isAuthenticated(req)) return res.status(401).json({ error: 'Non autorisé' });
+  const { lat, lon, name, folder } = req.body;
+  if (lat == null || lon == null) return res.status(400).json({ error: 'lat/lon requis' });
+  const nodeId   = (folder || 'Manuel').trim();
+  const nodeName = (name   || 'Point manuel').trim();
+  const ts = Math.floor(Date.now() / 1000);
+  const result = db.prepare(
+    'INSERT INTO positions (node_id, node_name, latitude, longitude, timestamp, source) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(nodeId, nodeName, parseFloat(lat), parseFloat(lon), ts, 'manual');
+  res.json(db.prepare('SELECT * FROM positions WHERE id = ?').get(result.lastInsertRowid));
 });
 
 app.delete(`/api/positions/:id`, (req, res) => {
